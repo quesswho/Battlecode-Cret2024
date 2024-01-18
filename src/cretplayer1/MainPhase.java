@@ -1,4 +1,4 @@
-package cretplayer;
+package cretplayer1;
 
 import battlecode.common.*;
 
@@ -69,7 +69,7 @@ public class MainPhase {
         else if(!healable.isEmpty()) {
             rc.heal(healable.get(RobotPlayer.rng.nextInt(healable.size())).location);
         }
-        else if(!enemies.isEmpty()) { // Get crumb
+        else if(!enemies.isEmpty()) {
             Direction dir = rc.getLocation().directionTo(enemies.get(RobotPlayer.id % enemies.size()).location);
             if(movableDir.contains(dir)) {
                 rc.move(dir);

@@ -1,4 +1,4 @@
-package cretplayer;
+package cretplayer1;
 
 import battlecode.common.Direction;
 import battlecode.common.GameActionException;
@@ -7,7 +7,6 @@ import battlecode.common.RobotController;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
 
 public class SetupPhase {
     static final Direction[] directions = {

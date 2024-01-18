@@ -1,4 +1,4 @@
-package cretplayer;
+package cretplayer1;
 
 import battlecode.common.*;
 
@@ -61,7 +61,7 @@ public strictfp class RobotPlayer {
                     return true;
                 }
             }
-            System.out.println("Could not spawn because of blockage!");
+            //System.out.println("Could not spawn because of blockage!");
             return true; // Could not spawn anywhere
         }
         return false;
