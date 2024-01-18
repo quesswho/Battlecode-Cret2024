@@ -39,9 +39,11 @@ public strictfp class RobotPlayer {
                     mapHeight = rc.getMapHeight();
                     mapWidth = rc.getMapWidth();
                     middle = new MapLocation(mapWidth/2, mapHeight/2);
+                    PathFinder.resetBug();
                 }
                 if(trySpawn(rc)) {
                     roundNum = rc.getRoundNum();
+                    PathFinder.resetBug();
                     continue;
                 }
                 robotLoc = rc.getLocation();
@@ -52,15 +54,15 @@ public strictfp class RobotPlayer {
                 } else {
                     MainPhase.run(rc);
                 }
-                if(rc.canBuyGlobal(GlobalUpgrade.HEALING)) {
+                if(rc.canBuyGlobal(GlobalUpgrade.CAPTURING)) {
+                    rc.buyGlobal(GlobalUpgrade.CAPTURING);
+                    System.out.println("Bought Capturing global Upgrade!");
+                } else if(rc.canBuyGlobal(GlobalUpgrade.HEALING)) {
                     rc.buyGlobal(GlobalUpgrade.HEALING);
                     System.out.println("Bought Healing global Upgrade!");
                 } else if(rc.canBuyGlobal(GlobalUpgrade.ATTACK)) {
                     rc.buyGlobal(GlobalUpgrade.ATTACK);
                     System.out.println("Bought Action global Upgrade!");
-                } else if(rc.canBuyGlobal(GlobalUpgrade.CAPTURING)) {
-                    rc.buyGlobal(GlobalUpgrade.CAPTURING);
-                    System.out.println("Bought Capturing global Upgrade!");
                 }
 
             } catch (GameActionException e) {
@@ -120,6 +122,7 @@ public strictfp class RobotPlayer {
                         break;
                     case PICKUP_FLAG:
                         rc.pickupFlag(action.location);
+                        PathFinder.resetBug();
                         rc.setIndicatorString("Picking up flag");
                         break;
                     case BUILD_BOMB:
@@ -147,7 +150,8 @@ public strictfp class RobotPlayer {
                         rc.move(robotLoc.directionTo(move.location));
                         break;
                     case FILL:
-                        rc.fill(move.location);
+                        // TODO: do not check if we can fill, this is because of an action cooldown and movement cooldown at the same time
+                        if(rc.canFill(move.location)) rc.fill(move.location);
                         break;
                     case NONE:
                         break;

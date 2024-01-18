@@ -79,6 +79,9 @@ public class MainPhase {
         for(int i = 0; i < 9; i++) {
             for(int j = 0; j < 9; j++) {
                 if(walls[i][j]==1) {
+                    if(i+robotLoc.x-4 < 0 || i+robotLoc.y-4 < 0 || i+robotLoc.x-4 >= RobotPlayer.mapWidth || i+robotLoc.y-4 >= RobotPlayer.mapHeight) {
+                        walls[i][j] = 1;
+                    }
                     rc.setIndicatorDot(new MapLocation(i+robotLoc.x-4, j+robotLoc.y-4), 0, 255, 0);
                 }
             }
@@ -115,9 +118,11 @@ public class MainPhase {
             }
         }
 
+        boolean hasFlag = rc.hasFlag();
+
         FlagInfo[] flags = rc.senseNearbyFlags(-1, RobotPlayer.opponentTeam);
         MapLocation flagDirection = null;
-        if (flags.length > 0) {
+        if (flags.length > 0 && !hasFlag) {
             Direction dir = directionTo(flags[0].getLocation());
 
             if (dir != null) {
@@ -126,7 +131,10 @@ public class MainPhase {
             }
 
         }
-        boolean hasFlag = rc.hasFlag();
+
+        FlagInfo[] allyflags = rc.senseNearbyFlags(-1, RobotPlayer.team);
+
+
 
         MapLocation closestToHome = null;
         int dist = 100000000;
@@ -148,6 +156,7 @@ public class MainPhase {
 
         List<Task> moveList = new ArrayList<>();
         List<Task> actionList = new ArrayList<>();
+
         for (Direction dir : movableDir) {
             Task m = new Task(Type.MOVE, robotLoc.add(dir));
             m.value = 1;
@@ -157,9 +166,27 @@ public class MainPhase {
                 if(flagDirection != null) {
                     if (flagDirection.equals(m.location) && !flags[0].isPickedUp()) m.value += 200;
                 }
-                if(!insideEnemyTerritory && robotLoc.distanceSquaredTo(closestToHome) < m.location.distanceSquaredTo(closestToHome)) m.value += 10;
-                if(!insideEnemyTerritory && robotLoc.distanceSquaredTo(RobotPlayer.middle) < m.location.distanceSquaredTo(RobotPlayer.middle)) m.value += 25;
-                m.value += (20 - average_ally.distanceSquaredTo(m.location)) * 0.25;
+                if(allyflags.length > 0) { // Camping on the flag
+                    if(allyflags[0].getLocation().equals(robotLoc)) { // We are standing on flag
+                        moveList.add(new Task(1000, Type.NONE, robotLoc));
+                    }
+                    boolean goToFlag = true;
+                    for(RobotInfo friend : friends) {
+                        if(allyflags[0].getLocation().equals(friend.location)) goToFlag = false;
+                    }
+                    if(goToFlag && robotLoc.directionTo(m.location).equals(directionTo(allyflags[0].getLocation()))) {
+                        m.value += 200;
+                    }
+                }
+                // Maybe strategize depending on map size
+                if(insideEnemyTerritory && robotLoc.distanceSquaredTo(closestToHome) < m.location.distanceSquaredTo(closestToHome)) m.value += 10;
+                if(!insideEnemyTerritory && robotLoc.distanceSquaredTo(RobotPlayer.middle) > m.location.distanceSquaredTo(RobotPlayer.middle)) m.value += 20;
+                if(insideEnemyTerritory && robotLoc.distanceSquaredTo(RobotPlayer.middle) > m.location.distanceSquaredTo(RobotPlayer.middle)) m.value += 5;
+                // Explore more if we are near the edge
+                if(insideEnemyTerritory && (robotLoc.x > RobotPlayer.mapWidth-4 || robotLoc.x < 4)) m.value += 5*RobotPlayer.mapHeight/20.0;
+                if(insideEnemyTerritory && (robotLoc.x > RobotPlayer.mapHeight-4 || robotLoc.y < 4)) m.value += 5*RobotPlayer.mapWidth/20.0;
+
+                m.value += (20 - average_ally.distanceSquaredTo(m.location)) * 0.4;
             }
 
             moveList.add(m);
@@ -175,7 +202,7 @@ public class MainPhase {
                 }
                 //if(robotLoc.distanceSquaredTo(closestToHome) < task.location.distanceSquaredTo(closestToHome)) task.value += 10;
 
-                task.value += (average_ally.distanceSquaredTo(task.location)) * 10;
+                task.value += (20-average_ally.distanceSquaredTo(task.location)) * 15;
             }
             moveList.add(task);
         }
