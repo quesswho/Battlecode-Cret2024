@@ -16,6 +16,13 @@ public class Pathfinder {
         bugNavZero(rc, loc);
     }
 
+    public static void moveTowards(RobotController rc, MapLocation loc, int distance, boolean fill) throws GameActionException {
+        if(rc.getLocation().equals(loc)) return;
+        Direction dir = rc.getLocation().directionTo(loc);
+        if(fill & rc.canFill(rc.getLocation().add(dir))) rc.fill(rc.getLocation().add(dir));
+        bugNavZero(rc, loc, distance);
+    }
+
     public static void explore(RobotController rc) throws GameActionException {
         if(rc.isMovementReady()) {
             MapLocation[] crumbLocs = rc.senseNearbyCrumbs(-1);
@@ -47,12 +54,37 @@ public class Pathfinder {
             }
         }
     }
+
+    public static void bugNavZero(RobotController rc, MapLocation destination, int distance) throws GameActionException{
+        Direction bugDir = rc.getLocation().directionTo(destination);
+
+        if(rc.canMove(bugDir) && rc.getLocation().add(bugDir).distanceSquaredTo(destination) > distance){
+            rc.move(bugDir);
+        } else {
+            for(int i = 0; i < 8; i++){
+                if(rc.canMove(bugDir) && rc.getLocation().add(bugDir).distanceSquaredTo(destination) > distance){
+                    rc.move(bugDir);
+                    break;
+                } else {
+                    bugDir = bugDir.rotateLeft();
+                }
+            }
+        }
+    }
     private static int bugState = 0; // 0 head to target, 1 circle obstacle
     private static MapLocation closestObstacle = null;
     private static int closestObstacleDist = 10000;
     private static Direction bugDir = null;
 
+    public static void resetBug(){
+        bugState = 0; // 0 head to target, 1 circle obstacle
+        closestObstacle = null;
+        closestObstacleDist = 10000;
+        bugDir = null;
+    }
     public static void bugNavOne(RobotController rc, MapLocation destination, boolean fill) throws GameActionException{
+        if(!rc.isMovementReady()) return;
+        rc.setIndicatorString("Navigating with state " + bugState);
         if(bugState == 0) {
             bugDir = rc.getLocation().directionTo(destination);
             if(fill & rc.canFill(rc.getLocation().add(bugDir))) {
@@ -65,13 +97,13 @@ public class Pathfinder {
                 closestObstacleDist = 10000;
             }
         } else {
-            if(rc.getLocation().equals(closestObstacle)){
-                bugState = 0;
-            }
-
             if(rc.getLocation().distanceSquaredTo(destination) < closestObstacleDist){
                 closestObstacleDist = rc.getLocation().distanceSquaredTo(destination);
                 closestObstacle = rc.getLocation();
+            }
+
+            if(rc.getLocation().equals(closestObstacle)){
+                bugState = 0;
             }
 
             for(int i = 0; i < 8; i++) {

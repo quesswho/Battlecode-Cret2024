@@ -112,10 +112,16 @@ public class RobotPlayer {
 
     private static void trySpawn(RobotController rc) throws GameActionException {
         MapLocation[] spawnLocs = rc.getAllySpawnLocations();
+        if(guardianID > -1) {
+            if(rc.canSpawn(centers.get(guardianID))) {
+                rc.spawn(centers.get(guardianID));
+                return;
+            }
+        }
         for (MapLocation loc : spawnLocs) {
             if (rc.canSpawn(loc)) {
                 rc.spawn(loc);
-                break;
+                return;
             }
         }
     }

@@ -47,8 +47,8 @@ public class MainPhase {
 
         // Prioritize actions based on role
         if (RobotPlayer.role == Role.MINION) {
-            runHeal(rc, nearbyTeammates);
             runAttack(rc, nearbyEnemies);
+            runHeal(rc, nearbyTeammates);
         } else if (RobotPlayer.role == Role.BUILDER) {
             runBuild(rc, nearbyEnemies, nearbyTeammates);
             runHeal(rc, nearbyTeammates);
@@ -103,7 +103,7 @@ public class MainPhase {
                 MapLocation awayPos = rc.getLocation().add(rc.getLocation().directionTo(leaderPos).opposite());
                 Pathfinder.moveTowards(rc, awayPos, true);
             } else {
-                Pathfinder.moveTowards(rc, leaderPos, true);
+                Pathfinder.moveTowards(rc, leaderPos, 2,true);
             }
             lastLeaderPos = leaderPos;
             rc.setIndicatorString("Following robot with id " + leaderID);
