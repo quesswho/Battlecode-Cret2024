@@ -5,6 +5,8 @@ import battlecode.common.GameActionException;
 import battlecode.common.MapLocation;
 import battlecode.common.RobotController;
 
+import java.util.List;
+
 public class Pathfinder {
 
     private static Direction dir;
@@ -109,8 +111,6 @@ public class Pathfinder {
             for(int i = 0; i < 8; i++) {
                 if(fill & rc.canFill(rc.getLocation().add(bugDir))) {
                     rc.fill(rc.getLocation().add(bugDir));
-                    bugDir = bugDir.rotateRight();
-                    bugDir = bugDir.rotateRight();
                     break;
                 } else if(rc.canMove(bugDir)){
                     rc.move(bugDir);
@@ -122,5 +122,62 @@ public class Pathfinder {
                 }
             }
         }
+    }
+
+    public static void bugNavOne(RobotController rc, MapLocation destination, MapLocation avoid, int distance, boolean fill) throws GameActionException{
+        if(!rc.isMovementReady()) return;
+        rc.setIndicatorString("Navigating with state " + bugState);
+        if(bugState == 0) {
+            bugDir = rc.getLocation().directionTo(destination);
+            if(fill & rc.canFill(rc.getLocation().add(bugDir))) {
+                rc.fill(rc.getLocation().add(bugDir));
+            } else if(rc.canMove(bugDir) && rc.getLocation().distanceSquaredTo(avoid) >= distance) { // should check if its passable
+                rc.move(bugDir);
+            } else {
+                bugState = 1;
+                closestObstacle = null;
+                closestObstacleDist = 10000;
+            }
+        } else {
+            if(rc.getLocation().distanceSquaredTo(destination) < closestObstacleDist){
+                closestObstacleDist = rc.getLocation().distanceSquaredTo(destination);
+                closestObstacle = rc.getLocation();
+            }
+
+            if(rc.getLocation().equals(closestObstacle)){
+                bugState = 0;
+            }
+
+            for(int i = 0; i < 8; i++) {
+                if(fill & rc.canFill(rc.getLocation().add(bugDir))) {
+                    rc.fill(rc.getLocation().add(bugDir));
+                    break;
+                } else if(rc.canMove(bugDir) && rc.getLocation().distanceSquaredTo(avoid) >= distance){
+                    rc.move(bugDir);
+                    bugDir = bugDir.rotateRight();
+                    bugDir = bugDir.rotateRight();
+                    break;
+                } else {
+                    bugDir = bugDir.rotateLeft();
+                }
+            }
+        }
+    }
+
+    public static MapLocation findClosestLocation(MapLocation me, List<MapLocation> otherLocs) {
+        MapLocation closest = null;
+        int minDist = Integer.MAX_VALUE;
+        for (MapLocation loc : otherLocs) {
+            int dist = me.distanceSquaredTo(loc);
+            if (dist < minDist) {
+                minDist = dist;
+                closest = loc;
+            }
+        }
+        return closest;
+    }
+
+    public static int findClosestDistance(MapLocation me, List<MapLocation> otherLocs) {
+        return findClosestLocation(me, otherLocs).distanceSquaredTo(me);
     }
 }

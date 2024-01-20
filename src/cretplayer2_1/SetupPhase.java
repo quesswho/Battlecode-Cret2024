@@ -36,10 +36,27 @@ public class SetupPhase {
     }
 
     private static void runGuardian(RobotController rc) throws GameActionException {
-        FlagInfo[] flags = rc.senseNearbyFlags(-1,rc.getTeam());
-        for(FlagInfo flag : flags) {
-            rc.setIndicatorString("Guarding flag " + flag.getID());
-            Pathfinder.moveTowards(rc, flag.getLocation(), true);
+        if(rc.getRoundNum() == 199) {
+            RobotPlayer.flagGoal[RobotPlayer.guardianID] = rc.getLocation();
+            return;
+        }
+        if(!rc.hasFlag()) {
+            FlagInfo[] flags = rc.senseNearbyFlags(-1, rc.getTeam());
+            for (FlagInfo flag : flags) {
+
+                Pathfinder.moveTowards(rc, flag.getLocation(), true);
+                if(rc.canPickupFlag(flag.getLocation())) rc.pickupFlag(flag.getLocation());
+            }
+        } else {
+            if(RobotPlayer.guardianID != 0) {
+                if(RobotPlayer.flagGoal[0].distanceSquaredTo(rc.getLocation()) < 7) {
+                    RobotPlayer.flagGoal[RobotPlayer.guardianID] = RobotPlayer.flagGoal[RobotPlayer.guardianID].add(RobotPlayer.flagGoal[0].directionTo(rc.getLocation()));
+                }
+
+                Pathfinder.bugNavOne(rc, RobotPlayer.flagGoal[RobotPlayer.guardianID], RobotPlayer.flagGoal[0], 7, true);
+            } else {
+                Pathfinder.bugNavOne(rc, RobotPlayer.flagGoal[RobotPlayer.guardianID], true);
+            }
         }
     }
 

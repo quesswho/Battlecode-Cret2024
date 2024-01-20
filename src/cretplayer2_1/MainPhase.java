@@ -39,7 +39,7 @@ public class MainPhase {
                 flagLocs.add(rc.getLocation().add(rc.getLocation().directionTo(flag.getLocation()).opposite()));
         }
 
-        MapLocation closestFlag = findClosestLocation(rc.getLocation(), flagLocs);
+        MapLocation closestFlag = Pathfinder.findClosestLocation(rc.getLocation(), flagLocs);
         if (closestFlag != null) {
             if (rc.canPickupFlag(closestFlag))
                 rc.pickupFlag(closestFlag);
@@ -65,6 +65,7 @@ public class MainPhase {
                 runDefendFlags(rc, warnLoc);
             else {
                 // Otherwise, try to follow a leader
+                rc.setIndicatorString("Attempting to follow leader!");
                 boolean followedLeader = tryFollowLeader(rc);
                 if (!followedLeader)
                     runFindFlags(rc);
@@ -72,7 +73,7 @@ public class MainPhase {
         } else {
             // if we have the flag, move towards the closest ally spawn zone
             MapLocation[] spawnLocs = rc.getAllySpawnLocations();
-            MapLocation closestSpawn = findClosestLocation(rc.getLocation(), Arrays.asList(spawnLocs));
+            MapLocation closestSpawn = Pathfinder.findClosestLocation(rc.getLocation(), Arrays.asList(spawnLocs));
             Pathfinder.bugNavOne(rc, closestSpawn, true);
         }
     }
@@ -103,10 +104,21 @@ public class MainPhase {
                 MapLocation awayPos = rc.getLocation().add(rc.getLocation().directionTo(leaderPos).opposite());
                 Pathfinder.moveTowards(rc, awayPos, true);
             } else {
-                Pathfinder.moveTowards(rc, leaderPos, 2,true);
+                Pathfinder.moveTowards(rc, leaderPos,true);
             }
             lastLeaderPos = leaderPos;
             rc.setIndicatorString("Following robot with id " + leaderID);
+            return true;
+        } else if(foundLeader) {
+            // Try to move towards the leader unless the leader is stuck. Then we should try and create space
+            if (lastLeaderPos != null && lastLeaderPos.equals(leaderPos)) {
+                MapLocation awayPos = rc.getLocation().add(rc.getLocation().directionTo(leaderPos).opposite());
+                Pathfinder.moveTowards(rc, awayPos, true);
+            } else {
+                Pathfinder.moveTowards(rc, leaderPos, 2,true);
+            }
+            lastLeaderPos = leaderPos;
+            rc.setIndicatorString("Following robot with flag and id " + leaderID);
             return true;
         }
         return false;
@@ -168,13 +180,14 @@ public class MainPhase {
     }
 
     public static void runGuardian(RobotController rc, RobotInfo[] nearbyEnemies) throws GameActionException {
-        // Always move towards home location (spawn zone center)
-        MapLocation homeLoc = RobotPlayer.centers.get(RobotPlayer.guardianID);
+        // Always move towards flag location
+        MapLocation homeLoc = RobotPlayer.flagGoal[RobotPlayer.guardianID];
         rc.setIndicatorDot(homeLoc, 0, 0, 255);
+
+        // If we are far away then return back
         if (!rc.getLocation().equals(homeLoc)) {
             Pathfinder.moveTowards(rc, homeLoc, true);
         }
-
         // Warn teammates if there are enemies nearby
         MapLocation curWarning = Communication.getLocation(rc, Communication.FLAG_WARNING_IDX);
         if (nearbyEnemies.length > 0) {
@@ -216,7 +229,7 @@ public class MainPhase {
             }
         }
 
-        MapLocation closestFlag = findClosestLocation(rc.getLocation(), flagLocs);
+        MapLocation closestFlag = Pathfinder.findClosestLocation(rc.getLocation(), flagLocs);
         if (closestFlag != null) {
             Pathfinder.moveTowards(rc, closestFlag, true);
 
@@ -230,19 +243,6 @@ public class MainPhase {
 
     public static void runDefendFlags(RobotController rc, MapLocation loc) throws GameActionException {
         Pathfinder.moveTowards(rc, loc, true);
-    }
-
-    public static MapLocation findClosestLocation(MapLocation me, List<MapLocation> otherLocs) {
-        MapLocation closest = null;
-        int minDist = Integer.MAX_VALUE;
-        for (MapLocation loc : otherLocs) {
-            int dist = me.distanceSquaredTo(loc);
-            if (dist < minDist) {
-                minDist = dist;
-                closest = loc;
-            }
-        }
-        return closest;
     }
 
 
