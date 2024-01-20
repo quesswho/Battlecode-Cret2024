@@ -187,6 +187,12 @@ public class MainPhase {
                 if(insideEnemyTerritory && (robotLoc.x > RobotPlayer.mapHeight-4 || robotLoc.y < 4)) m.value += 5*RobotPlayer.mapWidth/20.0;
 
                 m.value += (20 - average_ally.distanceSquaredTo(m.location)) * 0.4;
+
+                for (RobotInfo enemy : enemies) {
+                    if(enemy.hasFlag()) {
+                        if(robotLoc.directionTo(m.location).equals(robotLoc.directionTo(enemy.getLocation()))) m.value += 1000;
+                    }
+                }
             }
 
             moveList.add(m);
@@ -241,7 +247,7 @@ public class MainPhase {
                     attack.value += 100;
                 }
                 attack.value += (1000 - enemy.health) * 0.1+10;
-
+                if(enemy.hasFlag()) attack.value += 10000;
                 actionList.add(attack);
             }
         }
@@ -274,6 +280,6 @@ public class MainPhase {
     */
     public static Direction directionTo(MapLocation loc) throws Exception {
         if(robotLoc.equals(loc)) return null;
-        return PathFinder.getDirection(walls, robotLoc, loc);
+        return PathFinder.bugZero(walls, robotLoc, loc);
     }
 }
