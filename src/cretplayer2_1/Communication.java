@@ -29,7 +29,7 @@ public class Communication {
                     rc.writeSharedArray(idx, value);
                 }
                 return;
-            } 
+            }
         }
 
         int newIdx = START_ENEMY_IDX + numClusters;
@@ -64,7 +64,6 @@ public class Communication {
     }
 
     public static MapLocation getLocation(RobotController rc, int idx) throws GameActionException {
-        //return new MapLocation(0, 0);
 
         int value = rc.readSharedArray(idx);
         int locNum = value >> 4;

@@ -5,12 +5,16 @@ import battlecode.common.GameActionException;
 import battlecode.common.MapLocation;
 import battlecode.common.RobotController;
 
+import java.util.HashSet;
 import java.util.List;
 
 public class Pathfinder {
 
     private static Direction dir;
 
+    private static MapLocation prevDest = null;
+    private static HashSet<MapLocation> line = null;
+    private static int obstacleStartDist = 0;
     public static void moveTowards(RobotController rc, MapLocation loc, boolean fill) throws GameActionException {
         if(rc.getLocation().equals(loc)) return;
         Direction dir = rc.getLocation().directionTo(loc);
@@ -162,6 +166,88 @@ public class Pathfinder {
                 }
             }
         }
+    }
+
+    public static void bugNavTwo(RobotController rc, MapLocation destination, boolean fill) throws GameActionException{
+
+        if(!destination.equals(prevDest)) {
+            prevDest = destination;
+            line = createLine(rc.getLocation(), destination);
+        }
+
+        for(MapLocation loc : line) {
+            rc.setIndicatorDot(loc, 255, 0, 0);
+        }
+
+        if(bugState == 0) {
+            bugDir = rc.getLocation().directionTo(destination);
+            if(fill & rc.canFill(rc.getLocation().add(bugDir))) {
+                rc.fill(rc.getLocation().add(bugDir));
+            } else if(rc.canMove(bugDir)){
+                rc.move(bugDir);
+            } else {
+                bugState = 1;
+                obstacleStartDist = rc.getLocation().distanceSquaredTo(destination);
+                bugDir = rc.getLocation().directionTo(destination);
+            }
+        } else {
+            if(line.contains(rc.getLocation()) && rc.getLocation().distanceSquaredTo(destination) < obstacleStartDist) {
+                bugState = 0;
+            }
+
+            for(int i = 0; i < 9; i++){
+                if(fill & rc.canFill(rc.getLocation().add(bugDir))) {
+                    rc.fill(rc.getLocation().add(bugDir));
+                    break;
+                } else if(rc.canMove(bugDir)){
+                    rc.move(bugDir);
+                    bugDir = bugDir.rotateRight();
+                    bugDir = bugDir.rotateRight();
+                    break;
+                } else {
+                    bugDir = bugDir.rotateLeft();
+                }
+            }
+        }
+    }
+
+    private static HashSet<MapLocation> createLine(MapLocation a, MapLocation b) {
+        HashSet<MapLocation> locs = new HashSet<>();
+        int x = a.x, y = a.y;
+        int dx = b.x - a.x;
+        int dy = b.y - a.y;
+        int sx = (int) Math.signum(dx);
+        int sy = (int) Math.signum(dy);
+        dx = Math.abs(dx);
+        dy = Math.abs(dy);
+        int d = Math.max(dx,dy);
+        int r = d/2;
+        if (dx > dy) {
+            for (int i = 0; i < d; i++) {
+                locs.add(new MapLocation(x, y));
+                x += sx;
+                r += dy;
+                if (r >= dx) {
+                    locs.add(new MapLocation(x, y));
+                    y += sy;
+                    r -= dx;
+                }
+            }
+        }
+        else {
+            for (int i = 0; i < d; i++) {
+                locs.add(new MapLocation(x, y));
+                y += sy;
+                r += dx;
+                if (r >= dy) {
+                    locs.add(new MapLocation(x, y));
+                    x += sx;
+                    r -= dy;
+                }
+            }
+        }
+        locs.add(new MapLocation(x, y));
+        return locs;
     }
 
     public static MapLocation findClosestLocation(MapLocation me, List<MapLocation> otherLocs) {

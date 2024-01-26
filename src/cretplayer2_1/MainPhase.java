@@ -74,7 +74,7 @@ public class MainPhase {
             // if we have the flag, move towards the closest ally spawn zone
             MapLocation[] spawnLocs = rc.getAllySpawnLocations();
             MapLocation closestSpawn = Pathfinder.findClosestLocation(rc.getLocation(), Arrays.asList(spawnLocs));
-            Pathfinder.bugNavOne(rc, closestSpawn, true);
+            Pathfinder.bugNavTwo(rc, closestSpawn, true);
         }
     }
 
@@ -155,8 +155,8 @@ public class MainPhase {
             if (Communication.getIfUpdated(rc, i) && Communication.getCarried(rc, i)){
                 MapLocation flagLoc = Communication.getLocation(rc, i);
                 if (flagLoc.distanceSquaredTo(rc.getLocation()) < 36){
-                    if (rc.canBuild(TrapType.EXPLOSIVE, rc.getLocation())){
-                        rc.build(TrapType.EXPLOSIVE, rc.getLocation());
+                    if (rc.canBuild(TrapType.STUN, rc.getLocation())){
+                        rc.build(TrapType.STUN, rc.getLocation());
                         return;
                     }
                 }
