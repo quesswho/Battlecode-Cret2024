@@ -3,10 +3,13 @@ package cretplayer2_2;
 import battlecode.common.*;
 import jdk.nashorn.internal.objects.Global;
 
-import java.util.ArrayList;
-import java.util.Random;
+import java.util.*;
 
 public class RobotPlayer {
+
+    static int roundCount;
+    static int startRound;
+    public static String indicator;
 
     public static Random random = null;
     public static int personalID = -1;
@@ -40,7 +43,8 @@ public class RobotPlayer {
     static MapLocation[] flagGoal = new MapLocation[3];
     static MapLocation corner;
 
-
+    static boolean hasBeenAlive = false;
+    static boolean jailedPenalty = false;
     private static void populateSpawnCenters(RobotController rc) throws GameActionException {
         int tempx=0, tempy=0;
         // Center iff adjacent to 8 other spawn locations
@@ -101,6 +105,8 @@ public class RobotPlayer {
         middle = new MapLocation(mapWidth/2, mapHeight/2);
         team = rc.getTeam();
         opponent = rc.getTeam().opponent();
+        roundCount = 0;
+        FastMath.initRand(rc);
 
         populateSpawnCenters(rc);
 
@@ -120,16 +126,17 @@ public class RobotPlayer {
             }
         }
 
-        rc.setIndicatorString("My role is: " + role);
-
         while (true) {
             try {
-
+                startRound = rc.getRoundNum();
                 if (random == null) {
                     random = new Random(rc.getID());
                 }
+                indicator = "";
                 trySpawn(rc);
                 if (rc.isSpawned()) {
+                    hasBeenAlive = true;
+
                     // Buy global upgrade
                     if(rc.canBuyGlobal(GlobalUpgrade.CAPTURING)) {
                         rc.buyGlobal(GlobalUpgrade.CAPTURING);
@@ -150,7 +157,10 @@ public class RobotPlayer {
                     } else {
                         MainPhase.runMainPhase(rc);
                     }
+                } else if(hasBeenAlive){
+                    jailedPenalty = true;
                 }
+                rc.setIndicatorString(indicator);
             } catch (GameActionException e) {
                 System.out.println("GameActionException");
                 e.printStackTrace();
@@ -158,6 +168,10 @@ public class RobotPlayer {
                 System.out.println("Exception");
                 e.printStackTrace();
             } finally {
+                roundCount += 1;
+                if (startRound != rc.getRoundNum()) {
+                    System.out.print("Overran a round!");
+                }
                 Clock.yield();
             }
         }
@@ -171,6 +185,9 @@ public class RobotPlayer {
                 return;
             }
         }
+        List<MapLocation> list = Arrays.asList(spawnLocs);
+        Collections.shuffle(list);
+        list.toArray(spawnLocs);
         for (MapLocation loc : spawnLocs) {
             if (rc.canSpawn(loc)) {
                 rc.spawn(loc);

@@ -48,7 +48,7 @@ public class SetupPhase {
                     rc.pickupFlag(flag.getLocation());
                     break;
                 }
-                Direction dir = Pathfinder.bugNavTwo(rc, flag.getLocation(), true);
+                Direction dir = Pathfinder.directionToward(rc, flag.getLocation());
                 if(dir != null) {
                     rc.move(dir);
                     break;
@@ -170,6 +170,9 @@ public class SetupPhase {
     private static void runExplore(RobotController rc) throws GameActionException {
         MapInfo[] mapinfo = rc.senseNearbyMapInfos(2);
         for(MapInfo info : mapinfo) {
+            if(info.isWater()) {
+                if(rc.canDig(info.getMapLocation())) rc.dig(info.getMapLocation());
+            }
             if(info.isDam()) return;
         }
         RobotInfo[] nearbyTeammates = rc.senseNearbyRobots(-1, rc.getTeam());
