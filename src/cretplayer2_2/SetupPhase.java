@@ -1,14 +1,23 @@
 package cretplayer2_2;
 
 import battlecode.common.*;
+import battlecode.world.Flag;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 
 public class SetupPhase {
 
 
-    static final boolean MOVE_FLAG = false;
+    static MapLocation damLocation = null;
     public static void runSetup(RobotController rc) throws GameActionException {
+        Communication.updateRobot(rc);
+
+        FlagInfo[] allFlags = rc.senseNearbyFlags(-1, RobotPlayer.team);
+        for (FlagInfo flag : allFlags) {
+            Communication.updateFlagInfo(rc, flag);
+        }
+
         switch(RobotPlayer.role) {
             case MINION:
                 runExplore(rc);
@@ -26,19 +35,30 @@ public class SetupPhase {
         // Level up builder speciality
         if(rc.getLevel(SkillType.BUILD) != 6) {
             MapLocation buildLoc = rc.getLocation().add(RobotPlayer.directions[RobotPlayer.random.nextInt(8)]);
-            if(rc.canDig(buildLoc)) {
+            if(rc.canDig(buildLoc) && !Pathfinder.evenSquare(buildLoc)) {
                 rc.dig(buildLoc);
             }
-           Pathfinder.explore(rc);
+            Pathfinder.explore(rc);
         } else {
             runExplore(rc);
         }
     }
 
     private static void runGuardian(RobotController rc) throws GameActionException {
-        if(rc.getRoundNum() == 199) {
+        if(rc.getRoundNum() == 2) {
+            FlagPlacement.computeFlagGoal(rc);
+            return;
+        }
+
+        if(rc.getRoundNum() == 200) {
             Communication.clearSetup(rc);
-            RobotPlayer.flagSpawnLocation[RobotPlayer.guardianID] = rc.getLocation();
+
+            if(rc.senseNearbyFlags(0).length > 0) {
+                int value = Communication.locationToInt(rc.getLocation());
+                rc.writeSharedArray(Communication.ALLY_FLAG_IDX + RobotPlayer.guardianID*4+1, value);
+            } else {
+                System.out.println("Flag was not placed in correct location!");
+            }
             return;
         }
         FlagInfo[] flags = rc.senseNearbyFlags(-1, rc.getTeam());
@@ -55,14 +75,39 @@ public class SetupPhase {
                 }
             }
         } else {
-            if(MOVE_FLAG) {
-                Direction dir = bugNavTwo(rc, RobotPlayer.flagGoal[RobotPlayer.guardianID], flags);
-                if (dir == null) {
-                    rc.setIndicatorString("Cant find a place to walk to!" + bugState);
-                    return;
-                }
+            if(FlagPlacement.MOVE_FLAG) {
+                moveGuardian(rc);
+            }
+        }
+    }
 
+
+
+    private static void moveGuardian(RobotController rc) throws GameActionException {
+        ArrayList<MapLocation> flagLocations = Communication.getAllyFlagLocations(rc);
+
+        Direction dir = Pathfinder.directionToward(rc, RobotPlayer.flagGoal[RobotPlayer.guardianID]);
+        if (dir == null) {
+            RobotPlayer.indicator += "Cant find a place to walk to!";
+            return;
+        }
+
+        Direction[] dirs = {dir, dir.rotateLeft(), dir.rotateRight(),
+                dir.rotateLeft().rotateLeft(), dir.rotateRight().rotateRight(),
+                dir.rotateLeft().rotateLeft().rotateLeft(), dir.rotateRight().rotateRight().rotateRight()};
+
+        for(Direction moveDir : dirs) {
+            boolean canMove = true;
+            for(MapLocation flag : flagLocations) {
+                if(flag.equals(rc.getLocation())) continue;
+                if(!rc.canMove(moveDir) || rc.getLocation().add(moveDir).distanceSquaredTo(flag) <= 81 || Pathfinder.isTowards(rc.getLocation(), moveDir, flag)) {
+                    canMove = false;
+                    break;
+                }
+            }
+            if(canMove) {
                 rc.move(dir);
+                break;
             }
         }
     }
@@ -76,104 +121,21 @@ public class SetupPhase {
         return false;
     }
 
-    private static MapLocation prevDest = null;
-    private static HashSet<MapLocation> line = null;
-    private static int obstacleStartDist = 0;
-    private static int bugState = 0; // 0 head to target, 1 circle obstacle
-    private static Direction bugDir = null;
-
-    private static Direction bugNavTwo(RobotController rc, MapLocation destination,FlagInfo[] flags) throws GameActionException{
-        if(rc.getLocation().equals(destination)) return null;
-        if(!destination.equals(prevDest)) {
-            prevDest = destination;
-            line = createLine(rc.getLocation(), destination);
-        }
-
-        for(MapLocation loc : line) {
-            rc.setIndicatorDot(loc, 255, 0, 0);
-        }
-
-        if(bugState == 0) {
-            bugDir = rc.getLocation().directionTo(destination);
-            if(rc.canFill(rc.getLocation().add(bugDir))) {
-                rc.fill(rc.getLocation().add(bugDir));
-            } else if(rc.canMove(bugDir) && !nearFlag(rc, bugDir, flags)){
-                return bugDir;
-            } else {
-                bugState = 1;
-                obstacleStartDist = rc.getLocation().distanceSquaredTo(destination);
-                bugDir = rc.getLocation().directionTo(destination);
-            }
-        }
-
-        if(bugState == 1) {
-            if(line.contains(rc.getLocation()) && rc.getLocation().distanceSquaredTo(destination) < obstacleStartDist) {
-                bugState = 0;
-            }
-
-            for(int i = 0; i < 9; i++){
-                if(rc.canFill(rc.getLocation().add(bugDir))) {
-                    rc.fill(rc.getLocation().add(bugDir));
-                    return null; // Not really what we want, we should think of a different implementation
-                } else if(rc.canMove(bugDir) && !nearFlag(rc, bugDir, flags)){
-                    Direction result = bugDir;
-                    bugDir = bugDir.rotateRight();
-                    bugDir = bugDir.rotateRight();
-                    return result;
-                } else {
-                    bugDir = bugDir.rotateLeft();
-                }
-            }
-        }
-        return null;
-    }
-
-    private static HashSet<MapLocation> createLine(MapLocation a, MapLocation b) {
-        HashSet<MapLocation> locs = new HashSet<>();
-        int x = a.x, y = a.y;
-        int dx = b.x - a.x;
-        int dy = b.y - a.y;
-        int sx = (int) Math.signum(dx);
-        int sy = (int) Math.signum(dy);
-        dx = Math.abs(dx);
-        dy = Math.abs(dy);
-        int d = Math.max(dx,dy);
-        int r = d/2;
-        if (dx > dy) {
-            for (int i = 0; i < d; i++) {
-                locs.add(new MapLocation(x, y));
-                x += sx;
-                r += dy;
-                if (r >= dx) {
-                    locs.add(new MapLocation(x, y));
-                    y += sy;
-                    r -= dx;
-                }
-            }
-        }
-        else {
-            for (int i = 0; i < d; i++) {
-                locs.add(new MapLocation(x, y));
-                y += sy;
-                r += dx;
-                if (r >= dy) {
-                    locs.add(new MapLocation(x, y));
-                    x += sx;
-                    r -= dy;
-                }
-            }
-        }
-        locs.add(new MapLocation(x, y));
-        return locs;
-    }
-
     private static void runExplore(RobotController rc) throws GameActionException {
+        if(rc.getRoundNum() > 150 && damLocation != null) {
+            Pathfinder.moveToward(rc, damLocation);
+            return;
+        }
+
         MapInfo[] mapinfo = rc.senseNearbyMapInfos(2);
         for(MapInfo info : mapinfo) {
             if(info.isWater()) {
                 if(rc.canDig(info.getMapLocation())) rc.dig(info.getMapLocation());
             }
-            if(info.isDam()) return;
+            if(info.isDam()) {
+                damLocation = info.getMapLocation();
+                break;
+            }
         }
         RobotInfo[] nearbyTeammates = rc.senseNearbyRobots(-1, rc.getTeam());
         Direction dir = Pathfinder.exploreDirection(rc);

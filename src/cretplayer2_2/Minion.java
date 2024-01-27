@@ -20,14 +20,20 @@ public class Minion {
     static RobotInfo[] nearbyEnemies;
     static RobotInfo[] nearbyTeammates;
     static int teamStrength;
+    static int lastAttackRound = 0;
     static RobotInfo leader = null;
     static RobotInfo chaseTarget = null;
     static RobotInfo attackTarget = null;
     static RobotInfo healTarget = null;
+    static RobotInfo cachedLeader = null;
     static boolean instantkill = false;
     static MapLocation cachedEnemyLocation = null;
-    static int flagLast = -1;
+    public static int flagLast = -1;
     static int cachedRound = 0;
+    static int cachedLeaderRound = -1000;
+    static int closeFriendsSize = 0;
+    static final boolean FOLLOW_FLAG = true;
+
     private static void sense(RobotController rc) throws GameActionException {
         nearbyEnemies = rc.senseNearbyRobots(-1, rc.getTeam().opponent());
         nearbyTeammates = rc.senseNearbyRobots(-1, rc.getTeam());
@@ -39,12 +45,16 @@ public class Minion {
         healTarget = null;
         teamStrength = 1;
         instantkill = false;
-        
+        closeFriendsSize = 0;
+
         for (RobotInfo robot : nearbyTeammates) {
             if (leader == null || robot.getHealth() > leader.getHealth()) {
                 leader = robot;
             }
             teamStrength += 1;
+            if (robot.location.distanceSquaredTo(rc.getLocation()) <= 8){
+                closeFriendsSize++;
+            }
         }
 
         for (RobotInfo robot : nearbyEnemies) {
@@ -60,12 +70,32 @@ public class Minion {
     public static void runMinion(RobotController rc) throws GameActionException {
         sense(rc);
 
-        /*if (nearbyEnemies.length > 4) {
+        micro(rc);
+
+        macro(rc);
+
+        if (nearbyEnemies.length > 4 && rc.getCrumbs() > 1000) {
             if (rc.canBuild(TrapType.STUN, rc.getLocation())) {
                 rc.build(TrapType.STUN, rc.getLocation());
             }
-        }*/
+        }
 
+
+        // Sense if enemy flag is captured
+        if(flagLast > 0 && !rc.hasFlag() && Arrays.asList(RobotPlayer.spawnLocs).contains(rc.getLocation())) {
+            Communication.capturedFlag(rc, flagLast);
+        }
+
+        FlagInfo[] flag = rc.senseNearbyFlags(0,rc.getTeam().opponent());
+        if(flag.length > 0 && rc.hasFlag()) {
+            flagLast = flag[0].getID();
+        } else {
+            flagLast = -1;
+        }
+
+    }
+
+    private static void micro(RobotController rc) throws GameActionException {
         if(attackTarget != null) {
             RobotInfo deadTarget = null;
             if(rc.canAttack(attackTarget.location)) {
@@ -107,37 +137,49 @@ public class Minion {
         }
 
         // try to heal friendly robots
-        for (RobotInfo robot : nearbyTeammates) {
-            if (rc.canHeal(robot.getLocation())) {
-                rc.heal(robot.getLocation());
+        if(healTarget != null) {
+            if(rc.canHeal(healTarget.location)) {
+                rc.heal(healTarget.location);
             }
         }
+    }
 
-        MapLocation[] spawnLocs = rc.getAllySpawnLocations();
+    private static void macro(RobotController rc) throws GameActionException {
+        if (!rc.isMovementReady())
+            return;
+
 
         if (!rc.hasFlag()) {
+            if (closeFriendsSize < 3 && (rc.getRoundNum() - lastAttackRound) < 10) {
+                if (rc.isMovementReady() && leader != null ) {
+                    RobotPlayer.indicator += "group,";
+                    if (!rc.getLocation().isAdjacentTo(leader.location)) {
+                        Pathfinder.follow(rc, leader.location);
+                    } else if (rc.getHealth() < leader.health) { // allowing healthier target to move away first
+                        RobotPlayer.indicator += "stop";
+                        rc.setIndicatorDot(rc.getLocation(), 0, 255, 0);
+                        return;
+                    }
+                    rc.setIndicatorLine(rc.getLocation(), leader.location, 0, 255, 0);
+                } else if (rc.isMovementReady()
+                        && leader == null
+                        && cachedLeader != null
+                        && rc.getRoundNum() - cachedLeaderRound < 6
+                        && !rc.getLocation().isAdjacentTo(cachedLeader.location)){
+                    RobotPlayer.indicator += String.format("cacheGroup%s,",cachedLeader.location);
+                    Pathfinder.follow(rc, leader.location);
+                    rc.setIndicatorLine(rc.getLocation(), cachedLeader.location, 0, 255, 0);
+                }
+            }
             runFindFlags(rc, nearbyTeammates);
         } else {
             // if we have the flag, move towards the closest ally spawn zone
-
-            MapLocation closestSpawn = Pathfinder.findClosestLocation(rc.getLocation(), Arrays.asList(spawnLocs));
+            MapLocation closestSpawn = Pathfinder.findClosestLocation(rc.getLocation(), Arrays.asList(RobotPlayer.spawnLocs));
             Direction dir = Pathfinder.directionToward(rc, closestSpawn);
             if(dir != null) {
                 rc.move(dir);
             }
         }
-
-        if(flagLast > 0 && !rc.hasFlag() && Arrays.asList(spawnLocs).contains(rc.getLocation())) {
-            Communication.capturedFlag(rc, flagLast);
-        }
-
-        FlagInfo[] flag = rc.senseNearbyFlags(0,rc.getTeam().opponent());
-        if(flag.length > 0) {
-            flagLast = flag[0].getID();
-        } else {
-            flagLast = -1;
-        }
-
     }
 
     private static void chase(RobotController rc, MapLocation location) throws GameActionException{
@@ -160,7 +202,7 @@ public class Minion {
                 if (minCanSee > canSee) {
                     bestDir = dir;
                     minCanSee = canSee;
-                } else if (minCanSee == canSee && isDiagonal(bestDir) && !isDiagonal(dir)) {  // TODO: Test without diagonal
+                } else if (minCanSee == canSee && Pathfinder.isDiagonal(bestDir) && !Pathfinder.isDiagonal(dir)) {  // TODO: Test without diagonal
                     bestDir = dir;
                 }
             }
@@ -191,7 +233,7 @@ public class Minion {
                 if (minCanSee > canSee) {
                     bestDir = dir;
                     minCanSee = canSee;
-                } else if (minCanSee == canSee && isDiagonal(bestDir) && !isDiagonal(dir)) { // TODO: Test without diagonal
+                } else if (minCanSee == canSee && Pathfinder.isDiagonal(bestDir) && !Pathfinder.isDiagonal(dir)) { // TODO: Test without diagonal
                     bestDir = dir;
                 }
             }
@@ -230,47 +272,48 @@ public class Minion {
                 // Jitter the broadcast location to allow for some exploration
                 MapLocation newLoc = flagLoc;
                 for (int i = 0; i < 5; i++) {
-                    newLoc = newLoc.add(cretplayer2_2.RobotPlayer.directions[RobotPlayer.random.nextInt(8)]);
+                    newLoc = newLoc.add(RobotPlayer.directions[RobotPlayer.random.nextInt(8)]);
                 }
                 flagLocations.add(newLoc);
 
             }
         }
 
+        if(FOLLOW_FLAG) {
+            MapLocation closestFlag = Pathfinder.findClosestLocation(rc.getLocation(), flagLocations);
+            if(closestFlag != null) {
 
-        MapLocation closestFlag = Pathfinder.findClosestLocation(rc.getLocation(), flagLocations);
-        if(closestFlag != null) {
-
-            Direction dir = Pathfinder.directionToward(rc, closestFlag);
-            for(RobotInfo teammate : nearbyTeammates) {
-                if(teammate.hasFlag() && flagLocations.contains(teammate.getLocation())) { // Our teammate has the flag
-                    if(dir != null) {
-                        RobotPlayer.indicator += "Following flag holder";
-                        /*if(rc.getLocation().directionTo(closestFlag).equals(teammate.getLocation().directionTo(closestFlag))) {
-                            if(rc.canMove(rc.getLocation().directionTo(closestFlag))) {
-                                rc.move(rc.getLocation().directionTo(closestFlag));
+                Direction dir = Pathfinder.directionToward(rc, closestFlag);
+                for(RobotInfo teammate : nearbyTeammates) {
+                    if(teammate.hasFlag() && flagLocations.contains(teammate.getLocation())) { // Our teammate has the flag
+                        if(dir != null) {
+                            RobotPlayer.indicator += "Following flag holder";
+                            /*if(rc.getLocation().directionTo(closestFlag).equals(teammate.getLocation().directionTo(closestFlag))) {
+                                if(rc.canMove(rc.getLocation().directionTo(closestFlag))) {
+                                    rc.move(rc.getLocation().directionTo(closestFlag));
+                                }
+                            }*/
+                            int dist = rc.getLocation().add(dir).distanceSquaredTo(closestFlag);
+                            if(dist > 4) {
+                                rc.move(dir);
+                            } else { // Too close means we move away
+                                if(rc.canMove(dir.opposite())) {
+                                    rc.move(dir.opposite());
+                                }
                             }
-                        }*/
-                        int dist = rc.getLocation().add(dir).distanceSquaredTo(closestFlag);
-                        if(dist > 4) {
-                            rc.move(dir);
-                        } else { // Too close means we move away
-                            if(rc.canMove(dir.opposite())) {
-                                rc.move(dir.opposite());
-                            }
+                            return;
                         }
-                        return;
                     }
                 }
-            }
 
 
-            if(dir != null) {
-                if(rc.canMove(dir)) rc.move(dir);
+                if(dir != null) {
+                    if(rc.canMove(dir)) rc.move(dir);
+                }
+            } else {
+                // if there are no known enemy flags, explore randomly
+                Pathfinder.explore(rc);
             }
-        } else {
-            // if there are no known enemy flags, explore randomly
-            Pathfinder.explore(rc);
         }
     }
 
@@ -326,11 +369,11 @@ public class Minion {
         int minDis = Integer.MAX_VALUE;
         RobotInfo self = rc.senseRobotAtLocation(rc.getLocation());
         for (RobotInfo friend : nearbyTeammates) {
+            if(friend.health >= 1000) continue;
             int dis = friend.location.distanceSquaredTo(rc.getLocation());
             if (dis > HEAL_DISTANCE) {
                 continue;
             }
-            if(friend.health >= 1000) continue;
 
             if(result==null) result = friend;
             // Prioritize enemy with flags
@@ -415,9 +458,5 @@ public class Minion {
         }
         System.out.println("Could not calculate attack damage!");
         return 150;
-    }
-
-    static boolean isDiagonal(Direction dir) {
-        return dir.dx * dir.dy != 0;
     }
 }

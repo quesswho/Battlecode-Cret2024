@@ -3,7 +3,10 @@ package cretplayer2_2;
 import battlecode.common.*;
 
 public class Guardian {
-    public static void runGuardian(RobotController rc, RobotInfo[] nearbyEnemies, RobotInfo[] nearbyTeammates) throws GameActionException {
+    public static void runGuardian(RobotController rc) throws GameActionException {
+        RobotInfo[] nearbyEnemies = rc.senseNearbyRobots(-1, rc.getTeam().opponent());
+        RobotInfo[] nearbyTeammates = rc.senseNearbyRobots(-1, rc.getTeam());
+
         // attack enemies, prioritizing enemies that have your flag
         for (RobotInfo robot : nearbyEnemies) {
             if (robot.hasFlag()) {
@@ -29,6 +32,11 @@ public class Guardian {
             if (rc.canBuild(TrapType.STUN, rc.getLocation())){
                 rc.build(TrapType.STUN, rc.getLocation());
             }
+
+            if(rc.canFill(rc.getLocation().add(rc.getLocation().directionTo(RobotPlayer.middle)))) {
+                rc.fill(rc.getLocation().add(rc.getLocation().directionTo(RobotPlayer.middle)));
+            }
+
             if (rc.canBuild(TrapType.WATER, rc.getLocation().add(rc.getLocation().directionTo(RobotPlayer.middle)))){
                 rc.build(TrapType.WATER, rc.getLocation().add(rc.getLocation().directionTo(RobotPlayer.middle)));
             }

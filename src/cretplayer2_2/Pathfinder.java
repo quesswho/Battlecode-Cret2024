@@ -2,7 +2,6 @@ package cretplayer2_2;
 
 import battlecode.common.*;
 
-import java.util.HashSet;
 import java.util.List;
 
 public class Pathfinder {
@@ -22,8 +21,24 @@ public class Pathfinder {
             if(dir == null || !rc.canMove(dir)) {
                 dir = RobotPlayer.directions[RobotPlayer.random.nextInt(8)];
             }
+            boolean dirCanPass = rc.canMove(dir);
+            boolean dirCanFill = rc.canFill(rc.getLocation().add(dir));
 
-            if(rc.canMove(dir)) return dir;
+            boolean dirRightCanPass = rc.canMove(dir.rotateRight());
+            boolean dirLeftCanPass = rc.canMove(dir.rotateLeft());
+
+            if(rc.canMove(dir)) {
+                return dir;
+            } if (dirCanPass && rc.canMove(dir)) {
+                return dir;
+            } else if (dirRightCanPass && rc.canMove(dir.rotateRight())) {
+                return dir.rotateRight();
+            } else if (dirLeftCanPass && rc.canMove(dir.rotateLeft())) {
+                return dir.rotateLeft();
+            } else if(evenSquare(rc.getLocation().add(dir)) && dirCanFill) {
+                rc.fill(rc.getLocation().add(dir));
+                if(rc.canMove(dir)) return dir;
+            }
             else if(rc.canFill(rc.getLocation().add(dir))) rc.fill(rc.getLocation().add(dir));
         }
         return null;
@@ -36,7 +51,22 @@ public class Pathfinder {
         }
     }
 
-
+    static void tryMoveDir(RobotController rc, Direction dir) throws GameActionException {
+        if (rc.isMovementReady() && dir != Direction.CENTER) {
+            if (rc.canMove(dir) && canPass(rc, dir)) {
+                rc.move(dir);
+            } else if (rc.canMove(dir.rotateRight()) && canPass(rc, dir.rotateRight(), dir)) {
+                rc.move(dir.rotateRight());
+            } else if (rc.canMove(dir.rotateLeft()) && canPass(rc, dir.rotateLeft(), dir)) {
+                rc.move(dir.rotateLeft());
+            } else {
+                randomMove(rc);
+            }
+        }
+    }
+    static void follow(RobotController rc, MapLocation location) throws GameActionException {
+        tryMoveDir(rc, rc.getLocation().directionTo(location));
+    }
     static Direction randomMove(RobotController rc) throws GameActionException {
         int starting_i = FastMath.rand256() % RobotPlayer.directions.length;
         for (int i = starting_i; i < starting_i + 8; i++) {
@@ -109,22 +139,38 @@ public class Pathfinder {
             if (pathingCnt == 0) {
                 //if free of obstacle: try go directly to target
                 Direction dir = rc.getLocation().directionTo(location);
+                MapLocation loc = rc.getLocation().add(dir);
+                boolean dirCanFill = rc.canFill(loc);
                 boolean dirCanPass = canPass(rc, dir);
+
+                MapLocation rightLoc = rc.getLocation().add(dir.rotateRight());
                 boolean dirRightCanPass = canPass(rc, dir.rotateRight(), dir);
+                boolean dirRightCanFill = rc.canFill(rightLoc);
+
+                MapLocation leftLoc = rc.getLocation().add(dir.rotateLeft());
                 boolean dirLeftCanPass = canPass(rc, dir.rotateLeft(), dir);
-                if (dirCanPass || dirRightCanPass || dirLeftCanPass) {
-                    if(rc.canFill(rc.getLocation().add(dir))) {
-                        rc.fill(rc.getLocation().add(dir));
-                    } else if (dirCanPass && rc.canMove(dir)) {
+                boolean dirLeftCanFill = rc.canFill(leftLoc);
+
+                if (dirCanFill || dirCanPass || dirRightCanPass || dirLeftCanPass || dirRightCanFill || dirLeftCanFill) {
+
+                    if (dirCanPass && rc.canMove(dir)) {
                         return dir;
-                    } else if(rc.canFill(rc.getLocation().add(dir.rotateRight()))) {
-                        rc.fill(rc.getLocation().add(dir.rotateRight()));
                     } else if (dirRightCanPass && rc.canMove(dir.rotateRight())) {
                         return dir.rotateRight();
-                    } else if(rc.canFill(rc.getLocation().add(dir.rotateLeft()))) {
-                        rc.fill(rc.getLocation().add(dir.rotateLeft()));
                     } else if (dirLeftCanPass && rc.canMove(dir.rotateLeft())) {
                         return dir.rotateLeft();
+                    } else if(evenSquare(loc) && dirCanFill) {
+                        rc.fill(loc);
+                        if(rc.canMove(dir)) return dir;
+                    } else if(evenSquare(rightLoc) && dirRightCanFill) {
+                        rc.fill(rightLoc);
+                        if(rc.canMove(dir.rotateRight())) return dir.rotateRight();
+                    } else if(evenSquare(leftLoc) && dirLeftCanFill) {
+                        rc.fill(leftLoc);
+                        if(rc.canMove(dir.rotateLeft())) return dir.rotateLeft();
+                    } else if(dirCanFill) {
+                        rc.fill(loc);
+                        if(rc.canMove(dir)) return dir;
                     }
                 } else {
                     //encounters obstacle; run simulation to determine best way to go
@@ -147,10 +193,11 @@ public class Pathfinder {
                     }
                     if(pathingCnt == 8) {
                         RobotPlayer.indicator += "permblocked";
-                    } else if(rc.canFill(rc.getLocation().add(dir))) {
-                        rc.fill(rc.getLocation().add(dir));
                     } else if (rc.canMove(dir)) {
                         return dir;
+                    } else if(rc.canFill(rc.getLocation().add(dir)) && evenSquare(rc.getLocation().add(dir))) {
+                        rc.fill(rc.getLocation().add(dir));
+                        if (rc.canMove(dir)) return dir;
                     }
                 }
             } else {
@@ -188,10 +235,11 @@ public class Pathfinder {
                 }
                 Direction moveDir = pathingCnt == 0? prv[pathingCnt] :
                         (currentTurnDir == 0?prv[pathingCnt - 1].rotateLeft():prv[pathingCnt - 1].rotateRight());
-                if(rc.canFill(rc.getLocation().add(moveDir))) {
-                    rc.fill(rc.getLocation().add(moveDir));
-                } else if (rc.canMove(moveDir)) {
+                if (rc.canMove(moveDir)) {
                     return moveDir;
+                } else if(rc.canFill(rc.getLocation().add(moveDir)) && evenSquare(rc.getLocation().add(moveDir))) {
+                    rc.fill(rc.getLocation().add(moveDir));
+                    if (rc.canMove(moveDir)) return moveDir;
                 } else {
                     // a robot blocking us while we are following wall, wait
                     RobotPlayer.indicator += "blocked";
@@ -355,5 +403,13 @@ public class Pathfinder {
 
     public static boolean isTowards(MapLocation start, Direction dir, MapLocation end) {
         return start.add(dir).distanceSquaredTo(end) < start.distanceSquaredTo(end);
+    }
+
+    static boolean isDiagonal(Direction dir) {
+        return dir.dx * dir.dy != 0;
+    }
+
+    static boolean evenSquare(MapLocation loc) {
+        return ((loc.x + loc.y) & 1) != 0;
     }
 }

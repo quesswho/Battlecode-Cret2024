@@ -6,7 +6,41 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 public class Builder {
-    public static void runBuilder(RobotController rc, RobotInfo[] nearbyEnemies, RobotInfo[] nearbyTeammates) throws GameActionException {
+    public static final int ATTACK_DISTANCE = 4;
+    public static final int HEAL_DISTANCE = 4;
+    public static int DAMAGE = 150; // TODO: Compute additional damage from levels
+    public static final int BASE_DAMAGE = 150;
+    public static final int DAMAGE_UPGRADE = 60;
+    public static final int BASE_HEAL = 150;
+    public static final int HEAL_UPGRADE = 50;
+    public static int VISION_DIS = 25;
+    static RobotInfo[] nearbyEnemies;
+    static RobotInfo[] nearbyTeammates;
+    static int teamStrength;
+    static RobotInfo leader = null;
+    static RobotInfo chaseTarget = null;
+    static RobotInfo attackTarget = null;
+    static RobotInfo healTarget = null;
+    static boolean instantkill = false;
+    static MapLocation cachedEnemyLocation = null;
+    public static int flagLast = -1;
+    static int cachedRound = 0;
+
+    static final boolean FOLLOW_FLAG = true;
+
+
+    public static void runBuilder(RobotController rc) throws GameActionException {
+        nearbyEnemies = rc.senseNearbyRobots(-1, rc.getTeam().opponent());
+        nearbyTeammates = rc.senseNearbyRobots(-1, rc.getTeam());
+        // TODO: Use one senseNearbyRobots for less bytecode
+
+        leader = null;
+        chaseTarget = null;
+        attackTarget = null;
+        healTarget = null;
+        teamStrength = 1;
+        instantkill = false;
+
         // Build traps near enemies
         if (nearbyEnemies.length > 4) {
             if (rc.canBuild(TrapType.STUN, rc.getLocation())){
@@ -135,5 +169,146 @@ public class Builder {
         }
     }
 
+    private static RobotInfo getBestTarget(RobotController rc) throws GameActionException {
+        int minHitReqired = Integer.MAX_VALUE;
+        RobotInfo rv = null;
+        int minDis = Integer.MAX_VALUE;
+        RobotInfo self = rc.senseRobotAtLocation(rc.getLocation());
+        for (RobotInfo enemy : nearbyEnemies) {
+            int dis = enemy.location.distanceSquaredTo(rc.getLocation());
+            if (dis > ATTACK_DISTANCE) {
+                continue;
+            }
+            if(rv==null) rv = enemy;
+            // Prioritize enemy with flags
+            // TODO: We may exit out early and not attack enemy with a flag
+            if(enemy.hasFlag) return enemy;
 
+            int totalDamage = computeDamage(self);
+
+            if (enemy.getHealth() <= totalDamage) {
+                return enemy;
+            }
+
+            // Compute how much damage we can do collectively
+
+            for (RobotInfo friend : nearbyTeammates) {
+                int friendEnemyDis = friend.location.distanceSquaredTo(enemy.location);
+                if (friendEnemyDis <= ATTACK_DISTANCE) {
+                    totalDamage += computeDamage(friend);
+                }
+            }
+
+            int hitRequired = (int) Math.ceil((double) enemy.getHealth() / totalDamage);
+            if (hitRequired < minHitReqired) {
+                minHitReqired = hitRequired;
+                rv = enemy;
+                minDis = enemy.location.distanceSquaredTo(rc.getLocation());
+            } else if (hitRequired == minHitReqired) {
+                if (dis < minDis) { // Prioritize closer enemies
+                    rv = enemy;
+                    minDis = dis;
+                }
+            }
+            if(hitRequired == 1) instantkill = true;
+        }
+        return rv;
+    }
+
+    private static RobotInfo getBestHealTarget(RobotController rc) throws GameActionException {
+        int maxDamage = 0;
+        RobotInfo result = null;
+        int minDis = Integer.MAX_VALUE;
+        RobotInfo self = rc.senseRobotAtLocation(rc.getLocation());
+        for (RobotInfo friend : nearbyTeammates) {
+            int dis = friend.location.distanceSquaredTo(rc.getLocation());
+            if (dis > HEAL_DISTANCE) {
+                continue;
+            }
+            if(friend.health >= 1000) continue;
+
+            if(result==null) result = friend;
+            // Prioritize enemy with flags
+            if(friend.hasFlag) return friend;
+
+
+            // Compute how much damage we can do collectively
+            // TODO: Cache damage of each teammate and self
+            int totalDamage = computeDamage(self);
+            for (RobotInfo enemy : nearbyEnemies) {
+                int friendEnemyDis = friend.location.distanceSquaredTo(enemy.location);
+                if (friendEnemyDis <= ATTACK_DISTANCE) {
+                    totalDamage += computeDamage(friend);
+                }
+            }
+
+            if (totalDamage >= 1000) {
+                maxDamage = 1000;
+                if (dis < minDis) { // Prioritize closer friends
+                    result = friend;
+                    minDis = dis;
+                }
+            } else if (totalDamage >= maxDamage) {
+                maxDamage = totalDamage;
+                result = friend;
+            }
+        }
+        return result;
+    }
+
+    static int computeDamage(RobotInfo robot) {
+        int level = robot.attackLevel;
+        int base = BASE_DAMAGE;
+        if(RobotPlayer.attackUpgrade) {
+            base += DAMAGE_UPGRADE;
+        }
+        int jail = RobotPlayer.jailedPenalty ? 1 : 0;
+
+        switch(level) {
+            case 0:
+                return base-jail;
+            case 1:
+                return (int) Math.round((base-2*jail)*1.05);
+            case 2:
+                return (int) Math.round((base-2*jail)*1.07);
+            case 3:
+                return (int) Math.round((base-5*jail)*1.1);
+            case 4:
+                return (int) Math.round((base-5*jail)*1.3);
+            case 5:
+                return (int) Math.round((base-10*jail)*1.35);
+            case 6:
+                return (int) Math.round((base-12*jail)*1.6);
+        }
+        System.out.println("Could not calculate attack damage!");
+        return 150;
+    }
+
+    static int computeHeal(RobotInfo robot) {
+        int level = robot.healLevel;
+        int base = BASE_HEAL;
+        if(RobotPlayer.healingUpgrade) {
+            base += HEAL_UPGRADE;
+        }
+        int jail = RobotPlayer.jailedPenalty ? 1 : 0;
+
+        switch(level) {
+            case 0:
+                return base-jail;
+            case 1:
+                return (int) Math.round((base-5*jail)*1.03);
+            case 2:
+                return (int) Math.round((base-5*jail)*1.05);
+            case 3:
+                return (int) Math.round((base-10*jail)*1.07);
+            case 4:
+                return (int) Math.round((base-10*jail)*1.1);
+            case 5:
+                return (int) Math.round((base-15*jail)*1.15);
+            case 6:
+                return (int) Math.round((base-18*jail)*1.25);
+        }
+        System.out.println("Could not calculate attack damage!");
+        return 150;
+    }
 }

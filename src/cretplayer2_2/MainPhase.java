@@ -10,9 +10,6 @@ public class MainPhase {
     public static void runMainPhase(RobotController rc) throws GameActionException {
         Communication.updateRobot(rc);
 
-        RobotInfo[] nearbyEnemies = rc.senseNearbyRobots(-1, rc.getTeam().opponent());
-        RobotInfo[] nearbyTeammates = rc.senseNearbyRobots(-1, rc.getTeam());
-
         FlagInfo[] allFlags = rc.senseNearbyFlags(-1);
         for (FlagInfo flag : allFlags) {
             Communication.updateFlagInfo(rc, flag);
@@ -32,10 +29,10 @@ public class MainPhase {
                 Minion.runMinion(rc);
                 break;
             case BUILDER:
-                Builder.runBuilder(rc, nearbyEnemies, nearbyTeammates);
+                Builder.runBuilder(rc);
                 break;
             case GUARDIAN:
-                Guardian.runGuardian(rc, nearbyEnemies, nearbyTeammates);
+                Guardian.runGuardian(rc);
                 break;
         }
     }

@@ -1,7 +1,6 @@
 package cretplayer2_2;
 
 import battlecode.common.*;
-import jdk.nashorn.internal.objects.Global;
 
 import java.util.*;
 
@@ -16,7 +15,7 @@ public class RobotPlayer {
 
     public static Role role;
     public static int guardianID = -1;
-    public static ArrayList<MapLocation> centers = new ArrayList<>();
+
 
     public static boolean capturingUpgrade = false;
     public static boolean attackUpgrade = false;
@@ -40,62 +39,13 @@ public class RobotPlayer {
 
     public static MapLocation[] flagSpawnLocation = new MapLocation[3];
     static MapLocation middle;
+
     static MapLocation[] flagGoal = new MapLocation[3];
-    static MapLocation corner;
+
 
     static boolean hasBeenAlive = false;
     static boolean jailedPenalty = false;
-    private static void populateSpawnCenters(RobotController rc) throws GameActionException {
-        int tempx=0, tempy=0;
-        // Center iff adjacent to 8 other spawn locations
-        MapLocation[] spawnLocs = rc.getAllySpawnLocations();
-        for (int i = 0; i < spawnLocs.length; i++) {
-            int adjCount = 0;
-            for (int j = 0; j < spawnLocs.length; j++) {
-                if (spawnLocs[j].isAdjacentTo(spawnLocs[i])) {
-                    adjCount++;
-                }
-            }
-            if (adjCount == 9) {
-                centers.add(spawnLocs[i]);
-                tempx += spawnLocs[i].x;
-                tempy += spawnLocs[i].y;
-            }
-        }
-        int distbetweenflags = 7;
-        int min = 10000;
-        int dist = Pathfinder.findClosestDistance(new MapLocation(0,0), centers);
-        if(dist < min) {
-            min = dist;
-            corner = new MapLocation(0,0);
-            flagGoal[0] = new MapLocation(0,0);
-            flagGoal[1] = new MapLocation(distbetweenflags,0);
-            flagGoal[2] = new MapLocation(0,distbetweenflags);
-        }
-        dist = Pathfinder.findClosestDistance(new MapLocation(0,mapHeight-1), centers);
-        if(dist < min) {
-            min = dist;
-            corner = new MapLocation(0,mapHeight-1);
-            flagGoal[0] = new MapLocation(0,mapHeight-1);
-            flagGoal[1] = new MapLocation(distbetweenflags,mapHeight-1);
-            flagGoal[2] = new MapLocation(0,mapHeight-1-distbetweenflags);
-        }
-        dist = Pathfinder.findClosestDistance(new MapLocation(mapWidth-1,0), centers);
-        if(dist < min) {
-            min = dist;
-            corner = new MapLocation(mapWidth-1,0);
-            flagGoal[0] = new MapLocation(mapWidth-1,0);
-            flagGoal[1] = new MapLocation(mapWidth-1-distbetweenflags,0);
-            flagGoal[2] = new MapLocation(mapWidth-1,distbetweenflags);
-        }
-        dist = Pathfinder.findClosestDistance(new MapLocation(mapWidth-1,mapHeight-1), centers);
-        if(dist < min) {
-            corner = new MapLocation(mapWidth-1,mapHeight-1);
-            flagGoal[0] = new MapLocation(mapWidth-1,mapHeight-1);
-            flagGoal[1] = new MapLocation(mapWidth-1-distbetweenflags,mapHeight);
-            flagGoal[2] = new MapLocation(mapWidth-1,mapHeight-1-distbetweenflags);
-        }
-    }
+    public static MapLocation[] spawnLocs;
 
     public static void run(RobotController rc) throws GameActionException {
         role = Role.MINION;
@@ -105,10 +55,11 @@ public class RobotPlayer {
         middle = new MapLocation(mapWidth/2, mapHeight/2);
         team = rc.getTeam();
         opponent = rc.getTeam().opponent();
+        spawnLocs = rc.getAllySpawnLocations();
         roundCount = 0;
         FastMath.initRand(rc);
 
-        populateSpawnCenters(rc);
+        FlagPlacement.computeLayout(rc);
 
         if (personalID == -1 && rc.canWriteSharedArray(0, 0)) {
             personalID = rc.readSharedArray(0);
@@ -152,13 +103,14 @@ public class RobotPlayer {
                     }
 
                     int round = rc.getRoundNum();
-                    if (round < GameConstants.SETUP_ROUNDS) {
+                    if (round <= GameConstants.SETUP_ROUNDS) {
                         SetupPhase.runSetup(rc);
                     } else {
                         MainPhase.runMainPhase(rc);
                     }
                 } else if(hasBeenAlive){
                     jailedPenalty = true;
+                    Minion.flagLast = -1;
                 }
                 rc.setIndicatorString(indicator);
             } catch (GameActionException e) {
@@ -178,10 +130,12 @@ public class RobotPlayer {
     }
 
     private static void trySpawn(RobotController rc) throws GameActionException {
+        if(role != Role.GUARDIAN && roundCount < 10) return;
+
         MapLocation[] spawnLocs = rc.getAllySpawnLocations();
         if(guardianID > -1) {
-            if(rc.canSpawn(centers.get(guardianID))) {
-                rc.spawn(centers.get(guardianID));
+            if(rc.canSpawn(FlagPlacement.centers.get(guardianID))) {
+                rc.spawn(FlagPlacement.centers.get(guardianID));
                 return;
             }
         }
