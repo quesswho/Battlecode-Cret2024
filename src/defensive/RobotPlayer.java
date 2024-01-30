@@ -1,8 +1,11 @@
-package cretplayer2_2;
+package defensive;
 
 import battlecode.common.*;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Random;
 
 public class RobotPlayer {
 
@@ -89,16 +92,17 @@ public class RobotPlayer {
                     hasBeenAlive = true;
 
                     // Buy global upgrade
-                    if(rc.canBuyGlobal(GlobalUpgrade.HEALING)) {
-                        rc.buyGlobal(GlobalUpgrade.HEALING);
-                        Communication.updateGlobalUpgrade(rc, GlobalUpgrade.HEALING);
-                    } else if(rc.canBuyGlobal(GlobalUpgrade.ATTACK)) {
-                        rc.buyGlobal(GlobalUpgrade.ATTACK);
-                        Communication.updateGlobalUpgrade(rc, GlobalUpgrade.ATTACK);
-                    }
-                    else if(rc.canBuyGlobal(GlobalUpgrade.CAPTURING)) {
+                    if(rc.canBuyGlobal(GlobalUpgrade.CAPTURING)) {
                         rc.buyGlobal(GlobalUpgrade.CAPTURING);
                         Communication.updateGlobalUpgrade(rc, GlobalUpgrade.CAPTURING);
+                    }
+                    else if(rc.canBuyGlobal(GlobalUpgrade.HEALING)) {
+                        rc.buyGlobal(GlobalUpgrade.HEALING);
+                        Communication.updateGlobalUpgrade(rc, GlobalUpgrade.HEALING);
+                    }
+                    else if(rc.canBuyGlobal(GlobalUpgrade.ATTACK)) {
+                        rc.buyGlobal(GlobalUpgrade.ATTACK);
+                        Communication.updateGlobalUpgrade(rc, GlobalUpgrade.ATTACK);
                     }
 
                     int round = rc.getRoundNum();

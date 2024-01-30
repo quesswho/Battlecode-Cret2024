@@ -1,9 +1,6 @@
-package cretplayer2_2;
+package defensive;
 
 import battlecode.common.*;
-import cretplayer2_2.Communication;
-import cretplayer2_2.Pathfinder;
-import cretplayer2_2.RobotPlayer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -34,13 +31,9 @@ public class Minion {
     static int closeFriendsSize = 0;
     static final boolean FOLLOW_FLAG = true;
 
-    static int actionCooldown = 0;
-
     private static void sense(RobotController rc) throws GameActionException {
         nearbyEnemies = rc.senseNearbyRobots(-1, rc.getTeam().opponent());
         nearbyTeammates = rc.senseNearbyRobots(-1, rc.getTeam());
-
-        actionCooldown = rc.getActionCooldownTurns();
         // TODO: Use one senseNearbyRobots for less bytecode
 
         leader = null;
@@ -63,7 +56,7 @@ public class Minion {
 
         for (RobotInfo robot : nearbyEnemies) {
             teamStrength -= 1;
-            if (robot.location.distanceSquaredTo(rc.getLocation()) > ATTACK_DISTANCE && robot.hasFlag()) {
+            if (robot.location.distanceSquaredTo(rc.getLocation()) > ATTACK_DISTANCE) {
                 chaseTarget = robot;
             }
         }
@@ -78,15 +71,12 @@ public class Minion {
 
         macro(rc);
 
-        if (rc.isActionReady()){
-            sense(rc);
-            micro(rc);
+        if (nearbyEnemies.length > 4 && rc.getCrumbs() > 1000) {
+            if (rc.canBuild(TrapType.STUN, rc.getLocation())) {
+                rc.build(TrapType.STUN, rc.getLocation());
+            }
         }
 
-        if (leader != null){
-            cachedLeader = leader;
-            cachedLeaderRound = rc.getRoundNum();
-        }
 
         // Sense if enemy flag is captured
         if(flagLast > 0 && !rc.hasFlag() && Arrays.asList(RobotPlayer.spawnLocs).contains(rc.getLocation())) {
@@ -99,7 +89,6 @@ public class Minion {
         } else {
             flagLast = -1;
         }
-
 
     }
 
@@ -150,12 +139,6 @@ public class Minion {
                 rc.heal(healTarget.location);
             }
         }
-
-        if (nearbyEnemies.length > 4 && rc.getCrumbs() > 1000) {
-            if (rc.canBuild(TrapType.STUN, rc.getLocation())) {
-                rc.build(TrapType.STUN, rc.getLocation());
-            }
-        }
     }
 
     private static void macro(RobotController rc) throws GameActionException {
@@ -164,14 +147,6 @@ public class Minion {
 
 
         if (!rc.hasFlag()) {
-            MapLocation[] crumbLocs = rc.senseNearbyCrumbs(-1);
-            if(crumbLocs.length > 0) {
-                MapLocation closestCrumb = Pathfinder.findClosestLocation(rc.getLocation(), Arrays.asList(crumbLocs));
-                if(rc.getLocation().distanceSquaredTo(closestCrumb) <= 16) {
-                    Pathfinder.moveToward(rc, closestCrumb);
-                }
-            }
-
             if (closeFriendsSize < 3 && (rc.getRoundNum() - lastAttackRound) < 10) {
                 if (rc.isMovementReady() && leader != null ) {
                     RobotPlayer.indicator += "group,";
@@ -272,14 +247,14 @@ public class Minion {
         ArrayList<MapLocation> allyFlags = Communication.getAllyFlagLocations(rc);
         for(MapLocation allyLoc : allyFlags) {
             if(!Arrays.asList(RobotPlayer.flagSpawnLocation).contains(allyLoc)) { // If flag is taken by enemy
-                if(rc.getLocation().distanceSquaredTo(allyLoc) < 100) {
+                //if(rc.getLocation().distanceSquaredTo(allyLoc) < 100) {
                     Direction dir = Pathfinder.directionToward(rc, allyLoc);
                     if(dir != null) {
                         rc.move(dir);
                         RobotPlayer.indicator += "Defending flag!";
                         return;
                     }
-                }
+                //}
             }
         }
 

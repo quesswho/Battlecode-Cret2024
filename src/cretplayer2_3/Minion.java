@@ -1,14 +1,13 @@
-package cretplayer2_2;
+package cretplayer2_3;
 
 import battlecode.common.*;
-import cretplayer2_2.Communication;
-import cretplayer2_2.Pathfinder;
-import cretplayer2_2.RobotPlayer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 
 public class Minion {
+
+    static final int HEALING_CUTOFF = 151;
     public static final int ATTACK_DISTANCE = 4;
     public static final int HEAL_DISTANCE = 4;
     public static int DAMAGE = 150; // TODO: Compute additional damage from levels
@@ -24,8 +23,10 @@ public class Minion {
     static RobotInfo leader = null;
     static RobotInfo chaseTarget = null;
     static RobotInfo attackTarget = null;
+
     static RobotInfo healTarget = null;
     static RobotInfo cachedLeader = null;
+    static MapLocation commTarget = null;
     static boolean instantkill = false;
     static MapLocation cachedEnemyLocation = null;
     public static int flagLast = -1;
@@ -47,7 +48,7 @@ public class Minion {
         chaseTarget = null;
         attackTarget = null;
         healTarget = null;
-        teamStrength = 1;
+        teamStrength = actionCooldown==0?1:0;
         instantkill = false;
         closeFriendsSize = 0;
 
@@ -61,10 +62,16 @@ public class Minion {
             }
         }
 
+        int minDist = Integer.MAX_VALUE;
         for (RobotInfo robot : nearbyEnemies) {
             teamStrength -= 1;
-            if (robot.location.distanceSquaredTo(rc.getLocation()) > ATTACK_DISTANCE && robot.hasFlag()) {
+            if (robot.location.distanceSquaredTo(rc.getLocation()) > ATTACK_DISTANCE) {
                 chaseTarget = robot;
+            }
+            int dist = rc.getLocation().distanceSquaredTo(robot.location);
+            if(dist < minDist) {
+                minDist = dist;
+                commTarget = robot.location;
             }
         }
         attackTarget = getBestTarget(rc);
@@ -104,9 +111,20 @@ public class Minion {
     }
 
     private static void micro(RobotController rc) throws GameActionException {
+        if (attackTarget == null && commTarget != null && !rc.canSenseLocation(commTarget)) {
+            if (rc.canAttack(commTarget)) {
+                rc.setIndicatorLine(rc.getLocation(), commTarget, 255, 0, 0);
+                rc.attack(commTarget);
+            }
+            cachedEnemyLocation = commTarget;
+            cachedRound = rc.getRoundNum();
+        }
         if(attackTarget != null) {
+            lastAttackRound = rc.getRoundNum();
+            //disableTurnDirRound = rc.getRoundNum() + 40;
             RobotInfo deadTarget = null;
             if(rc.canAttack(attackTarget.location)) {
+                cachedRound = rc.getRoundNum();
                 if (attackTarget.health <= DAMAGE) {
                     deadTarget = attackTarget;
                 }
@@ -127,13 +145,24 @@ public class Minion {
             if (cachedEnemyLocation != null && rc.isMovementReady()) {
                 fallback(rc, cachedEnemyLocation);
             }
+        }
 
+        if (rc.getHealth() < HEALING_CUTOFF && cachedEnemyLocation != null) {
+            fallback(rc, cachedEnemyLocation);
+        }
+
+        // try to heal friendly robots
+        if(healTarget != null) {
+            if(rc.canHeal(healTarget.location)) {
+                rc.heal(healTarget.location);
+            }
         }
 
         if (rc.isMovementReady() && rc.isActionReady()) {
             if (chaseTarget != null) {
                 cachedEnemyLocation = chaseTarget.location;
                 cachedRound = rc.getRoundNum();
+                //if ((rc.getHealth() > chaseTarget.health || teamStrength > 2) && actionCooldown < 1) {
                 if (rc.getHealth() > chaseTarget.health || teamStrength > 2) {
                     chase(rc, chaseTarget.location);
                 } else { // we are at disadvantage, pull back
@@ -144,12 +173,7 @@ public class Minion {
             }
         }
 
-        // try to heal friendly robots
-        if(healTarget != null) {
-            if(rc.canHeal(healTarget.location)) {
-                rc.heal(healTarget.location);
-            }
-        }
+
 
         if (nearbyEnemies.length > 4 && rc.getCrumbs() > 1000) {
             if (rc.canBuild(TrapType.STUN, rc.getLocation())) {
@@ -176,6 +200,7 @@ public class Minion {
                 if (rc.isMovementReady() && leader != null ) {
                     RobotPlayer.indicator += "group,";
                     if (!rc.getLocation().isAdjacentTo(leader.location)) {
+                        RobotPlayer.indicator += "following leader,";
                         Pathfinder.follow(rc, leader.location);
                     } else if (rc.getHealth() < leader.health) { // allowing healthier target to move away first
                         RobotPlayer.indicator += "stop";
@@ -189,7 +214,7 @@ public class Minion {
                         && rc.getRoundNum() - cachedLeaderRound < 6
                         && !rc.getLocation().isAdjacentTo(cachedLeader.location)){
                     RobotPlayer.indicator += String.format("cacheGroup%s,",cachedLeader.location);
-                    Pathfinder.follow(rc, leader.location);
+                    Pathfinder.follow(rc, cachedLeader.location);
                     rc.setIndicatorLine(rc.getLocation(), cachedLeader.location, 0, 255, 0);
                 }
             }
@@ -224,7 +249,8 @@ public class Minion {
                 if (minCanSee > canSee) {
                     bestDir = dir;
                     minCanSee = canSee;
-                } else if (minCanSee == canSee && Pathfinder.isDiagonal(bestDir) && !Pathfinder.isDiagonal(dir)) {  // TODO: Test without diagonal
+                //} else if (minCanSee == canSee) {  // TODO: Test without diagonal
+                    } else if (minCanSee == canSee && Pathfinder.isDiagonal(bestDir) && !Pathfinder.isDiagonal(dir)) {  // TODO: Test without diagonal
                     bestDir = dir;
                 }
             }
@@ -272,7 +298,8 @@ public class Minion {
         ArrayList<MapLocation> allyFlags = Communication.getAllyFlagLocations(rc);
         for(MapLocation allyLoc : allyFlags) {
             if(!Arrays.asList(RobotPlayer.flagSpawnLocation).contains(allyLoc)) { // If flag is taken by enemy
-                if(rc.getLocation().distanceSquaredTo(allyLoc) < 100) {
+                if(rc.getLocation().distanceSquaredTo(allyLoc) < 200) {
+                //if(rc.getID() % 2 == 0) {
                     Direction dir = Pathfinder.directionToward(rc, allyLoc);
                     if(dir != null) {
                         rc.move(dir);
@@ -308,23 +335,23 @@ public class Minion {
                 Direction dir = Pathfinder.directionToward(rc, closestFlag);
                 for(RobotInfo teammate : nearbyTeammates) {
                     if(teammate.hasFlag() && flagLocations.contains(teammate.getLocation())) { // Our teammate has the flag
-                        if(dir != null) {
+                        //if(dir != null) {
                             RobotPlayer.indicator += "Following flag holder";
+                            Pathfinder.follow(rc, closestFlag);
                             /*if(rc.getLocation().directionTo(closestFlag).equals(teammate.getLocation().directionTo(closestFlag))) {
                                 if(rc.canMove(rc.getLocation().directionTo(closestFlag))) {
                                     rc.move(rc.getLocation().directionTo(closestFlag));
                                 }
                             }*/
-                            int dist = rc.getLocation().add(dir).distanceSquaredTo(closestFlag);
+                            /*int dist = rc.getLocation().add(dir).distanceSquaredTo(closestFlag);
                             if(dist > 4) {
                                 rc.move(dir);
                             } else { // Too close means we move away
                                 if(rc.canMove(dir.opposite())) {
                                     rc.move(dir.opposite());
                                 }
-                            }
-                            return;
-                        }
+                            }*/
+                        //}
                     }
                 }
 
@@ -334,6 +361,7 @@ public class Minion {
                 }
             } else {
                 // if there are no known enemy flags, explore randomly
+                RobotPlayer.indicator += "Exploring";
                 Pathfinder.explore(rc);
             }
         }

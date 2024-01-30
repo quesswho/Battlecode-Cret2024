@@ -1,4 +1,4 @@
-package cretplayer2_2;
+package defensive;
 
 import battlecode.common.*;
 
@@ -17,22 +17,19 @@ public class Builder {
     static RobotInfo[] nearbyEnemies;
     static RobotInfo[] nearbyTeammates;
     static int teamStrength;
-    static int lastAttackRound = 0;
     static RobotInfo leader = null;
     static RobotInfo chaseTarget = null;
     static RobotInfo attackTarget = null;
     static RobotInfo healTarget = null;
-    static RobotInfo cachedLeader = null;
     static boolean instantkill = false;
     static MapLocation cachedEnemyLocation = null;
     public static int flagLast = -1;
     static int cachedRound = 0;
-    static int cachedLeaderRound = -1000;
-    static int closeFriendsSize = 0;
+
     static final boolean FOLLOW_FLAG = true;
 
 
-    private static void sense(RobotController rc) throws GameActionException {
+    public static void runBuilder(RobotController rc) throws GameActionException {
         nearbyEnemies = rc.senseNearbyRobots(-1, rc.getTeam().opponent());
         nearbyTeammates = rc.senseNearbyRobots(-1, rc.getTeam());
         // TODO: Use one senseNearbyRobots for less bytecode
@@ -43,60 +40,9 @@ public class Builder {
         healTarget = null;
         teamStrength = 1;
         instantkill = false;
-        closeFriendsSize = 0;
-
-        for (RobotInfo robot : nearbyTeammates) {
-            if (leader == null || robot.getHealth() > leader.getHealth()) {
-                leader = robot;
-            }
-            teamStrength += 1;
-            if (robot.location.distanceSquaredTo(rc.getLocation()) <= 8){
-                closeFriendsSize++;
-            }
-        }
-
-        for (RobotInfo robot : nearbyEnemies) {
-            teamStrength -= 1;
-            if (robot.location.distanceSquaredTo(rc.getLocation()) > ATTACK_DISTANCE && robot.hasFlag()) {
-                chaseTarget = robot;
-            }
-        }
-        attackTarget = getBestTarget(rc);
-        healTarget = getBestHealTarget(rc);
-    }
-
-    public static void runBuilder(RobotController rc) throws GameActionException {
-        sense(rc);
-
-        micro(rc);
-
-        if (rc.isActionReady()){
-            sense(rc);
-            micro(rc);
-        }
-
-        if (leader != null){
-            cachedLeader = leader;
-            cachedLeaderRound = rc.getRoundNum();
-        }
-
-        // Sense if enemy flag is captured
-        if(flagLast > 0 && !rc.hasFlag() && Arrays.asList(RobotPlayer.spawnLocs).contains(rc.getLocation())) {
-            Communication.capturedFlag(rc, flagLast);
-        }
-
-        FlagInfo[] flag = rc.senseNearbyFlags(0,rc.getTeam().opponent());
-        if(flag.length > 0 && rc.hasFlag()) {
-            flagLast = flag[0].getID();
-        } else {
-            flagLast = -1;
-        }
-    }
-
-    private static void micro(RobotController rc) throws GameActionException {
 
         // Build traps near enemies
-        if (nearbyEnemies.length > 2) {
+        if (nearbyEnemies.length > 4) {
             if (rc.canBuild(TrapType.STUN, rc.getLocation())){
                 rc.build(TrapType.STUN, rc.getLocation());
             }
@@ -107,49 +53,31 @@ public class Builder {
         }
 
         // try to heal friendly robots
-        if(healTarget != null) {
-            if(rc.canHeal(healTarget.location)) {
-                rc.heal(healTarget.location);
+        for (RobotInfo robot : nearbyTeammates) {
+            if (robot.hasFlag()) {
+                if (rc.canHeal(robot.getLocation())) {
+                    rc.heal(robot.getLocation());
+                }
             }
         }
 
-        if(attackTarget != null) {
-            RobotInfo deadTarget = null;
-            if(rc.canAttack(attackTarget.location)) {
-                if (attackTarget.health <= DAMAGE) {
-                    deadTarget = attackTarget;
-                }
-                rc.attack(attackTarget.location);
+        for (RobotInfo robot : nearbyTeammates) {
+            if (rc.canHeal(robot.getLocation())) {
+                rc.heal(robot.getLocation());
             }
-
-            // Find the nearest enemy excluding any dead targets
-            int minDis = Integer.MAX_VALUE;
-            cachedEnemyLocation = null;
-            for (RobotInfo enemy : nearbyEnemies) {
-                int dis = enemy.location.distanceSquaredTo(rc.getLocation());
-                if (enemy != deadTarget && dis < minDis) {
-                    cachedEnemyLocation = enemy.location;
-                    minDis = dis;
-                }
-            }
-
-            if (cachedEnemyLocation != null && rc.isMovementReady()) {
-                fallback(rc, cachedEnemyLocation);
-            }
-
         }
 
-        if (rc.isMovementReady() && rc.isActionReady()) {
-            if (chaseTarget != null) {
-                cachedEnemyLocation = chaseTarget.location;
-                cachedRound = rc.getRoundNum();
-                if (rc.getHealth() > chaseTarget.health || teamStrength > 3) {
-                    //chase(rc, chaseTarget.location);
-                } else { // we are at disadvantage, pull back
-                    fallback(rc, chaseTarget.location);
-                }
-            } else if (cachedEnemyLocation != null && rc.getRoundNum() - cachedRound <= 2) {
-                chase(rc, cachedEnemyLocation);
+        // attack enemies, prioritizing enemies that have your flag
+        for (RobotInfo robot : nearbyEnemies) {
+            if (robot.hasFlag()) {
+                Pathfinder.moveToward(rc, robot.getLocation());
+                if (rc.canAttack(robot.getLocation()))
+                    rc.attack(robot.getLocation());
+            }
+        }
+        for (RobotInfo robot : nearbyEnemies) {
+            if (rc.canAttack(robot.getLocation())) {
+                rc.attack(robot.getLocation());
             }
         }
 
@@ -170,84 +98,22 @@ public class Builder {
         }
     }
 
-    private static void chase(RobotController rc, MapLocation location) throws GameActionException{
-        Direction forwardDir = rc.getLocation().directionTo(location);
-        Direction[] dirs = {forwardDir, forwardDir.rotateLeft(), forwardDir.rotateRight(),
-                forwardDir.rotateLeft().rotateLeft(), forwardDir.rotateRight().rotateRight()};
-        Direction bestDir = null;
-        int minCanSee = Integer.MAX_VALUE;
-
-        // pick a direction to chase to minimize the number of enemies that can see us
-        for (Direction dir : dirs) {
-            if (rc.canMove(dir) && rc.getLocation().add(dir).distanceSquaredTo(location) <= ATTACK_DISTANCE) {
-                int canSee = 0;
-                for (RobotInfo enemy : nearbyEnemies){
-                    int newDis = rc.getLocation().add(dir).distanceSquaredTo(enemy.location);
-                    if (newDis <= VISION_DIS) {
-                        canSee++;
-                    }
-                }
-                if (minCanSee > canSee) {
-                    bestDir = dir;
-                    minCanSee = canSee;
-                } else if (minCanSee == canSee && Pathfinder.isDiagonal(bestDir) && !Pathfinder.isDiagonal(dir)) {  // TODO: Test without diagonal
-                    bestDir = dir;
-                }
-            }
-        }
-        if (bestDir != null) {
-            RobotPlayer.indicator += String.format("chase%s,", location);
-            rc.move(bestDir);
-        } else {
-            RobotPlayer.indicator += "failchase,";
-        }
-    }
-    private static void fallback(RobotController rc, MapLocation location) throws GameActionException {
-        Direction backDir = rc.getLocation().directionTo(location).opposite();
-        Direction[] dirs = {Direction.CENTER, backDir, backDir.rotateLeft(), backDir.rotateRight(),
-                backDir.rotateLeft().rotateLeft(), backDir.rotateRight().rotateRight()};
-        Direction bestDir = null;
-        int minCanSee = Integer.MAX_VALUE;
-        // pick a direction to move back to minimize the number of enemies that can see us
-        for (Direction dir : dirs) {
-            if (rc.canMove(dir)) {
-                int canSee = 0;
-                for (RobotInfo enemy : nearbyEnemies){
-                    int newDis = rc.getLocation().add(dir).distanceSquaredTo(enemy.location);
-                    if (newDis <= VISION_DIS) {
-                        canSee++;
-                    }
-                }
-                if (minCanSee > canSee) {
-                    bestDir = dir;
-                    minCanSee = canSee;
-                } else if (minCanSee == canSee && Pathfinder.isDiagonal(bestDir) && !Pathfinder.isDiagonal(dir)) { // TODO: Test without diagonal
-                    bestDir = dir;
-                }
-            }
-        }
-        if (bestDir != null && bestDir != Direction.CENTER){
-            RobotPlayer.indicator += "kite,";
-            rc.move(bestDir);
-        }
-    }
-
     public static void runFindFlags(RobotController rc, RobotInfo[] nearbyTeammates) throws GameActionException {
 
         // Help out if flag is taken nearby
-        ArrayList<MapLocation> allyFlags = Communication.getAllyFlagLocations(rc);
+        /*ArrayList<MapLocation> allyFlags = Communication.getAllyFlagLocations(rc);
         for(MapLocation allyLoc : allyFlags) {
             if(!Arrays.asList(RobotPlayer.flagSpawnLocation).contains(allyLoc)) { // If flag is taken by enemy
-                if(rc.getLocation().distanceSquaredTo(allyLoc) < 100) {
-                    Direction dir = Pathfinder.directionToward(rc, allyLoc);
+                if(rc.getLocation().distanceSquaredTo(allyLoc) < 50) {
+                    Direction dir = Pathfinder.bugNavTwoDirection(rc, allyLoc, true);
                     if(dir != null) {
                         rc.move(dir);
-                        RobotPlayer.indicator += "Defending flag!";
+                        rc.setIndicatorString("Defending flag!");
                         return;
                     }
                 }
             }
-        }
+        }*/
 
         // move towards the closest enemy flag (including broadcast locations)
         ArrayList<MapLocation> flagLocations = Communication.getEnemyFlagLocations(rc);
@@ -260,7 +126,7 @@ public class Builder {
                 // Jitter the broadcast location to allow for some exploration
                 MapLocation newLoc = flagLoc;
                 for (int i = 0; i < 5; i++) {
-                    newLoc = newLoc.add(cretplayer2_2.RobotPlayer.directions[RobotPlayer.random.nextInt(8)]);
+                    newLoc = newLoc.add(RobotPlayer.directions[RobotPlayer.random.nextInt(8)]);
                 }
                 flagLocations.add(newLoc);
                 rc.setIndicatorDot(newLoc, 255, 0, 0);

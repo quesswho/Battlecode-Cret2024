@@ -1,4 +1,4 @@
-package cretplayer2_2;
+package cretplayer2_3;
 
 import battlecode.common.Direction;
 import battlecode.common.GameActionException;
@@ -81,8 +81,9 @@ public class FlagPlacement {
 
         System.out.println("Maximal rotations: " + count);
         // If map is too fucked up we dont bother moving flag
-        if(count > 11) {
+        if(count > 10) {
             //MOVE_FLAG = false;
+            System.out.println("Individual spawn flag placement.");
             for(int i = 0; i < 3; i++) {
                 flagLocations.add(closestWallOrCornerLoc(centers.get(i)));
             }
@@ -160,19 +161,19 @@ public class FlagPlacement {
             minDist = dist;
             corner = new MapLocation(0,0);
         }
-        dist = loc.distanceSquaredTo(new MapLocation(0,RobotPlayer.mapHeight-1));
+        dist = loc.distanceSquaredTo(new MapLocation(0, RobotPlayer.mapHeight-1));
         if(dist < minDist) {
             minDist = dist;
-            corner = new MapLocation(0,RobotPlayer.mapHeight-1);
+            corner = new MapLocation(0, RobotPlayer.mapHeight-1);
         }
         dist = loc.distanceSquaredTo(new MapLocation(RobotPlayer.mapWidth-1,0));
         if(dist < minDist) {
             minDist = dist;
             corner = new MapLocation(RobotPlayer.mapWidth-1,0);
         }
-        dist = loc.distanceSquaredTo(new MapLocation(RobotPlayer.mapWidth-1,RobotPlayer.mapHeight-1));
+        dist = loc.distanceSquaredTo(new MapLocation(RobotPlayer.mapWidth-1, RobotPlayer.mapHeight-1));
         if(dist < minDist) {
-            corner = new MapLocation(RobotPlayer.mapWidth-1,RobotPlayer.mapHeight-1);
+            corner = new MapLocation(RobotPlayer.mapWidth-1, RobotPlayer.mapHeight-1);
         }
         return corner;
     }
@@ -185,7 +186,7 @@ public class FlagPlacement {
             minDist = dist;
             corner = Direction.SOUTHWEST;
         }
-        dist = loc.distanceSquaredTo(new MapLocation(0,RobotPlayer.mapHeight-1));
+        dist = loc.distanceSquaredTo(new MapLocation(0, RobotPlayer.mapHeight-1));
         if(dist < minDist) {
             minDist = dist;
             corner = Direction.NORTHWEST;
@@ -195,7 +196,7 @@ public class FlagPlacement {
             minDist = dist;
             corner = Direction.SOUTHEAST;
         }
-        dist = loc.distanceSquaredTo(new MapLocation(RobotPlayer.mapWidth-1,RobotPlayer.mapHeight-1));
+        dist = loc.distanceSquaredTo(new MapLocation(RobotPlayer.mapWidth-1, RobotPlayer.mapHeight-1));
         if(dist < minDist) {
             corner = Direction.NORTHEAST;
         }
@@ -215,7 +216,7 @@ public class FlagPlacement {
             result = Direction.SOUTHWEST;
         }
 
-        int northWest = loc.distanceSquaredTo(new MapLocation(0,RobotPlayer.mapHeight-1));
+        int northWest = loc.distanceSquaredTo(new MapLocation(0, RobotPlayer.mapHeight-1));
         if(northWest < minDist) {
             minDist = northWest;
             dir = Direction.NORTHWEST;
@@ -229,7 +230,7 @@ public class FlagPlacement {
             result = Direction.SOUTHEAST;
         }
 
-        int northEast = loc.distanceSquaredTo(new MapLocation(RobotPlayer.mapWidth-1,RobotPlayer.mapHeight-1));
+        int northEast = loc.distanceSquaredTo(new MapLocation(RobotPlayer.mapWidth-1, RobotPlayer.mapHeight-1));
         if(northEast < minDist) {
             dir = Direction.NORTHEAST;
             result = Direction.NORTHEAST;
@@ -267,11 +268,11 @@ public class FlagPlacement {
             location = new MapLocation(0,0);
         }
 
-        int northWest = loc.distanceSquaredTo(new MapLocation(0,RobotPlayer.mapHeight-1));
+        int northWest = loc.distanceSquaredTo(new MapLocation(0, RobotPlayer.mapHeight-1));
         if(northWest < minDist) {
             minDist = northWest;
             dir = Direction.NORTHWEST;
-            location = new MapLocation(0,RobotPlayer.mapHeight-1);
+            location = new MapLocation(0, RobotPlayer.mapHeight-1);
         }
 
         int southEast = loc.distanceSquaredTo(new MapLocation(RobotPlayer.mapWidth-1,0));
@@ -281,25 +282,25 @@ public class FlagPlacement {
             location = new MapLocation(RobotPlayer.mapWidth-1,0);
         }
 
-        int northEast = loc.distanceSquaredTo(new MapLocation(RobotPlayer.mapWidth-1,RobotPlayer.mapHeight-1));
+        int northEast = loc.distanceSquaredTo(new MapLocation(RobotPlayer.mapWidth-1, RobotPlayer.mapHeight-1));
         if(northEast < minDist) {
             dir = Direction.NORTHEAST;
-            location = new MapLocation(RobotPlayer.mapWidth-1,RobotPlayer.mapHeight-1);
+            location = new MapLocation(RobotPlayer.mapWidth-1, RobotPlayer.mapHeight-1);
         }
 
         if((dir == Direction.SOUTHWEST || dir == Direction.NORTHWEST) && Math.abs(southWest - northWest) < NEAREST_CORNER_WALL_PRECISION) {
-            location = new MapLocation(0,(RobotPlayer.mapHeight-1)/2);
+            location = new MapLocation(0,loc.y);
         }
 
         if((dir == Direction.SOUTHEAST || dir == Direction.NORTHEAST) && Math.abs(southEast - northEast) < NEAREST_CORNER_WALL_PRECISION) {
-            location = new MapLocation(RobotPlayer.mapWidth-1,(RobotPlayer.mapHeight-1)/2);
+            location = new MapLocation(RobotPlayer.mapWidth-1,loc.y);
         }
 
         if((dir == Direction.SOUTHEAST || dir == Direction.SOUTHWEST) && Math.abs(southEast - southWest) < NEAREST_CORNER_WALL_PRECISION) {
-            location = new MapLocation((RobotPlayer.mapWidth-1)/2,0);
+            location = new MapLocation(loc.x,0);
         }
         if((dir == Direction.NORTHEAST || dir == Direction.NORTHWEST) && Math.abs(northEast - northWest) < NEAREST_CORNER_WALL_PRECISION) {
-            location = new MapLocation((RobotPlayer.mapWidth-1)/2,0);
+            location = new MapLocation(loc.x,RobotPlayer.mapHeight-1);
         }
 
         return location;

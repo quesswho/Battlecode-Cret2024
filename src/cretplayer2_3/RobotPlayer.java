@@ -1,8 +1,11 @@
-package cretplayer2_2;
+package cretplayer2_3;
 
 import battlecode.common.*;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Random;
 
 public class RobotPlayer {
 
@@ -72,7 +75,7 @@ public class RobotPlayer {
                 guardianID = assignCount;
                 rc.writeSharedArray(1, assignCount + 1);
             } else if(assignCount < 6) {
-                role = Role.BUILDER;
+                //role = Role.BUILDER;
                 rc.writeSharedArray(1, assignCount + 1);
             }
         }
