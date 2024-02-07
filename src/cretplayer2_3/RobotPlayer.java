@@ -92,11 +92,11 @@ public class RobotPlayer {
                     hasBeenAlive = true;
 
                     // Buy global upgrade
-                    if(rc.canBuyGlobal(GlobalUpgrade.HEALING)) {
-                        rc.buyGlobal(GlobalUpgrade.HEALING);
-                        Communication.updateGlobalUpgrade(rc, GlobalUpgrade.HEALING);
-                    } else if(rc.canBuyGlobal(GlobalUpgrade.ATTACK)) {
+                    if(rc.canBuyGlobal(GlobalUpgrade.ATTACK)) {
                         rc.buyGlobal(GlobalUpgrade.ATTACK);
+                        Communication.updateGlobalUpgrade(rc, GlobalUpgrade.HEALING);
+                    } else if(rc.canBuyGlobal(GlobalUpgrade.HEALING)) {
+                        rc.buyGlobal(GlobalUpgrade.HEALING);
                         Communication.updateGlobalUpgrade(rc, GlobalUpgrade.ATTACK);
                     }
                     else if(rc.canBuyGlobal(GlobalUpgrade.CAPTURING)) {

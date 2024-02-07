@@ -16,7 +16,7 @@ public class MainPhase {
         for (FlagInfo flag : allFlags) {
             Communication.updateFlagInfo(rc, flag);
         }
-
+        RobotPlayer.flagSpawnLocation = Communication.getAllyFlagSpawnLocations(rc).toArray(new MapLocation[0]);
         ArrayList<MapLocation> flagLocations = Communication.getEnemyFlagLocations(rc);
 
         MapLocation closestFlag = Pathfinder.findClosestLocation(rc.getLocation(), flagLocations);

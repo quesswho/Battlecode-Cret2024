@@ -200,6 +200,15 @@ public class Communication {
         return result;
     }
 
+    public static ArrayList<MapLocation> getAllyFlagSpawnLocations(RobotController rc) throws GameActionException {
+        ArrayList<MapLocation> result = new ArrayList<>();
+        for(int i = 0; i < 3; i++) {
+            MapLocation loc = intToLocation(rc.readSharedArray(ALLY_FLAG_IDX+i*4+1));
+            if(loc != null) result.add(loc);
+        }
+        return result;
+    }
+
     public static ArrayList<MapLocation> getAllyFlagLocations(RobotController rc) throws GameActionException {
         ArrayList<MapLocation> result = new ArrayList<>();
         for(int i = 0; i < 3; i++) {
